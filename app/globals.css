@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fafafa;
+  --foreground: #0b0c10;
+  --border: #e4e4e7;
+  --muted-foreground: #52525b;
+  --card: rgba(255, 255, 255, 0.78);
+  --card-strong: rgba(255, 255, 255, 0.92);
+  --accent: #3b6cff;
+  --accent-soft: rgba(59, 108, 255, 0.12);
+  --frosted-bg: rgba(255, 255, 255, 0.72);
+  --frosted-border: rgba(10, 12, 16, 0.10);
+  --frosted-shadow: 0 30px 70px rgba(0, 0, 0, 0.10);
+  --frosted-inset: inset 0 1px 0 rgba(255, 255, 255, 0.60);
+  --tuner-card-alpha: 0.88;
+  --tuner-blur-px: 16px;
+  --tuner-glow-strength: 0.55;
+  --tuner-radius: 24px;
+}
+
+html.dark {
+  --background: #080808;
+  --foreground: #eeeeee;
+  --border: #24262c;
+  --muted-foreground: #9ba1aa;
+  --card: #101114cc;
+  --card-strong: #151821;
+  --accent: #6f95ff;
+  --accent-soft: #202c4a;
+  --frosted-bg: rgba(18, 20, 27, 0.88);
+  --frosted-border: rgba(136, 146, 170, 0.18);
+  --frosted-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+  --frosted-inset: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-card-strong: var(--card-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+::selection {
+  background: rgba(59, 108, 255, 0.22);
+  color: var(--foreground);
+}
+
+.frosted-card {
+  background: color-mix(in srgb, var(--frosted-bg) calc(var(--tuner-card-alpha) * 100%), transparent);
+  border: 1px solid var(--frosted-border) !important;
+  box-shadow: var(--frosted-inset), var(--frosted-shadow) !important;
+  /* 避免对 backdrop-filter 做 transition：会触发持续重绘，易导致 GPU 满载、整机卡顿 */
+  backdrop-filter: blur(var(--tuner-blur-px));
+  -webkit-backdrop-filter: blur(var(--tuner-blur-px));
+  border-radius: var(--tuner-radius) !important;
+  transition: border-radius 220ms ease, background-color 220ms ease;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .frosted-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+.glow-tab {
+  transition: all 220ms ease;
+}
+
+.glow-tab:hover {
+  border-color: rgba(111, 149, 255, var(--tuner-glow-strength));
+  box-shadow: 0 0 0 1px rgba(111, 149, 255, calc(var(--tuner-glow-strength) * 0.72)),
+    0 0 22px rgba(111, 149, 255, calc(var(--tuner-glow-strength) * 0.36));
+}
+
+.app-bg {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(90% 60% at 12% 8%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    radial-gradient(80% 50% at 86% 80%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%);
+  background-repeat: no-repeat;
+}
+
+.knowledge-inline-markdown {
+  vertical-align: baseline;
+  line-height: inherit;
+}
+
+.knowledge-inline-markdown .katex {
+  display: inline-flex;
+  align-items: baseline;
+  vertical-align: -0.05em;
+}
+
+.knowledge-inline-markdown .katex-html {
+  line-height: 1;
+}
