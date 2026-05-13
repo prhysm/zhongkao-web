@@ -448,32 +448,13 @@ function collectLeafNodes(nodes: EnglishKnowledgeNode[]): EnglishKnowledgeLeafNo
   return leaves;
 }
 
-function trimModulePathFromNode(
-  node: EnglishKnowledgeNode,
-  moduleId: string,
-  moduleTitle: string
-): EnglishKnowledgeNode {
-  if ("children" in node) {
-    return {
-      ...node,
-      children: node.children.map((child) => trimModulePathFromNode(child, moduleId, moduleTitle)),
-    };
-  }
-
-  return {
-    ...node,
-    pathIds: node.pathIds[0] === moduleId ? node.pathIds.slice(1) : node.pathIds,
-    pathTitles: node.pathTitles[0] === moduleTitle ? node.pathTitles.slice(1) : node.pathTitles,
-  };
-}
-
 function extractModuleChildren(nodes: EnglishKnowledgeNode[], title: string): EnglishKnowledgeNode[] {
   const moduleNode = nodes.find(
     (node): node is EnglishKnowledgeBranchNode => "children" in node && node.title === title
   );
   if (!moduleNode) return [];
 
-  return moduleNode.children.map((child) => trimModulePathFromNode(child, moduleNode.id, moduleNode.title));
+  return moduleNode.children;
 }
 
 export function isEnglishKnowledgeLeaf(node: EnglishKnowledgeNode): node is EnglishKnowledgeLeafNode {
@@ -482,7 +463,7 @@ export function isEnglishKnowledgeLeaf(node: EnglishKnowledgeNode): node is Engl
 
 const ENGLISH_FULL_TREE = buildEnglishKnowledgeTree();
 
-export const ENGLISH_KNOWLEDGE_TREE = extractModuleChildren(ENGLISH_FULL_TREE, "内功心法");
+export const ENGLISH_KNOWLEDGE_TREE = ENGLISH_FULL_TREE;
 export const ENGLISH_KNOWLEDGE_LEAVES = collectLeafNodes(ENGLISH_KNOWLEDGE_TREE);
 export const ENGLISH_KNOWLEDGE_LEAF_MAP = new Map(ENGLISH_KNOWLEDGE_LEAVES.map((item) => [item.id, item]));
 export const ENGLISH_SKILL_TREE = extractModuleChildren(ENGLISH_FULL_TREE, "外功招式");

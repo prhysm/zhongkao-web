@@ -117,7 +117,7 @@ function buildEnglishSolvingSkills(): Record<string, SolvingSkill[]> {
   const grouped = new Map<string, SolvingSkill[]>();
 
   for (const item of ENGLISH_SKILL_LEAVES) {
-    const category = item.pathTitles[0] ?? "英语解题技巧";
+    const category = item.pathTitles[1] ?? "英语解题技巧";
     const detailSource = item.coreContent || item.warning;
     const next = grouped.get(category) ?? [];
     next.push({

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useId } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -18,22 +17,6 @@ function isTrustedKnowledgeImageSrc(src: string): boolean {
   if (!src.startsWith("/images/knowledge/")) return false;
   if (/[\0\r\n]/.test(src)) return false;
   return true;
-}
-
-function useMathRootId(markdown: string) {
-  const mathRootId = useId().replace(/:/g, "");
-
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent("zhongkao:render-math", {
-        detail: {
-          selector: `[data-math-root-id="${mathRootId}"]`,
-        },
-      })
-    );
-  }, [markdown, mathRootId]);
-
-  return mathRootId;
 }
 
 function createMarkdownComponents(variant: "default" | "reading"): Components {
@@ -134,15 +117,13 @@ export function KnowledgeMarkdown({
   /** reading：沉浸式长文，更大字号与行高 */
   variant?: "default" | "reading";
 }) {
-  const mathRootId = useMathRootId(markdown);
-
   const wrap =
     variant === "reading"
       ? "knowledge-markdown prose-katex mt-0 max-w-none text-base [&_.katex-display]:my-4 [&_.katex-display]:max-w-full [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex]:text-[1em] [&_li]:leading-[1.8] [&_p]:mb-4 [&_p]:text-[15px] [&_p]:leading-[1.85] [&_ul]:my-4 [&_ul]:space-y-2"
       : "knowledge-markdown prose-katex mt-2 text-sm [&_.katex-display]:my-3 [&_.katex-display]:max-w-full [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex]:text-[0.95em]";
   const markdownComponents = createMarkdownComponents(variant);
   return (
-    <div className={wrap} data-knowledge-md data-math-root data-math-root-id={mathRootId}>
+    <div className={wrap} data-knowledge-md>
       <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={markdownComponents}>
         {markdown}
       </ReactMarkdown>
@@ -157,15 +138,8 @@ export function KnowledgeInlineMarkdown({
   markdown: string;
   className?: string;
 }) {
-  const mathRootId = useMathRootId(markdown);
-
   return (
-    <span
-      className={`knowledge-inline-markdown prose-katex inline max-w-full break-words align-baseline text-inherit [&_.katex-display]:inline [&_.katex-display]:m-0 [&_.katex]:text-[1em] ${className}`.trim()}
-      data-knowledge-md
-      data-math-root
-      data-math-root-id={mathRootId}
-    >
+    <span className={`knowledge-inline-markdown prose-katex inline max-w-full break-words align-baseline text-inherit [&_.katex-display]:inline [&_.katex-display]:m-0 [&_.katex]:text-[1em] ${className}`.trim()} data-knowledge-md>
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
