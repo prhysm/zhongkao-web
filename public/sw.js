@@ -1,8 +1,7 @@
-/* eslint-disable no-undef */
 // Minimal service worker: satisfies installability (fetch handler) and stays network-first.
 // Extend with workbox/caches if you need offline HTML or assets later.
 
-self.addEventListener("install", (event) => {
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 

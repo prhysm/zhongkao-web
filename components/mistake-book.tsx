@@ -11,33 +11,27 @@ import {
   usesItemIdKnowledgeDirectory,
 } from "@/lib/mockData";
 import { useLocalStorage } from "@/lib/useLocalStorage";
-import { CreatableMultiSelect, CreatableSelect } from "@/components/selectors";
+import { CreatableMultiSelect } from "@/components/selectors";
+import { AuthHeader } from "@/components/auth-header";
 import {
   appendUniqueSelectorValue,
   normalizeSelectorText,
 } from "@/components/selectors/selector-utils";
 import { StructuredKnowledgePanel } from "@/components/structured-knowledge-panel";
 import { EnglishKnowledgePanel } from "@/components/english-knowledge-panel";
-import { ChineseKnowledgePanel, ChineseSkillPanel } from "@/components/chinese-knowledge-panel";
+import { ChineseKnowledgePanel } from "@/components/chinese-knowledge-panel";
 import { LearningDiagnosticsDashboard } from "@/components/learning-diagnostics-dashboard";
 import {
   ENGLISH_KNOWLEDGE_TREE,
-  ENGLISH_SKILL_LEAVES,
-  ENGLISH_SKILL_TREE,
   findEnglishKnowledgeLeafById,
   findEnglishKnowledgeLeafByTitle,
-  findEnglishSkillLeafById,
-  findEnglishSkillLeafByTitle,
 } from "@/lib/english-knowledge";
 import {
   CHINESE_DEFAULT_MODULE_ID,
   CHINESE_KNOWLEDGE_LEAVES,
   CHINESE_KNOWLEDGE_OPTION_LABELS,
-  CHINESE_SKILL_LEAVES,
   findChineseKnowledgeLeafById,
   findChineseKnowledgeLeafByTitle,
-  findChineseSkillLeafById,
-  findChineseSkillLeafByTitle,
 } from "@/lib/chinese-knowledge";
 import { KnowledgeInlineMarkdown, KnowledgeMarkdown } from "@/components/knowledge-markdown";
 import { getKnowledgeFrequencyMeta } from "@/lib/knowledge-frequency";
@@ -52,22 +46,11 @@ import {
   parseStoredTimeManagementRecords,
 } from "@/lib/study-data";
 import { getFocusExamTemplateBySubjectLabel } from "@/lib/focus-exams";
+import { MISTAKE_STORAGE_KEY, parseStoredMistakes, type MistakeItem } from "@/lib/mistakes-model";
+import { useAuth } from "@/lib/auth-context";
+import { useCloudMistakes } from "@/lib/use-cloud-mistakes";
 
-type JumpTarget = { type: "knowledge" | "skill"; id: string } | null;
-
-type MistakeItem = {
-  id: string;
-  subject: Subject;
-  source: string;
-  knowledge: string[];
-  knowledgeIds: (string | null)[];
-  reason: string;
-  skill: string;
-  skillId?: string;
-  solved: boolean;
-};
-
-const STORAGE_KEY = "zhongkao-multi-tab-mistakes";
+type JumpTarget = { id: string } | null;
 
 const CHINESE_KNOWLEDGE_POINTS: KnowledgePoint[] = CHINESE_KNOWLEDGE_LEAVES.map((item) => ({
   id: item.id,
@@ -226,64 +209,6 @@ function findScoreBlock(
   return record.blocks.find((block) => block.id === target.id) ?? record.blocks.find((block) => block.label === target.label);
 }
 
-/**
- * LocalStorage 里残留的旧数据可能不是数组（被手动改坏 / 旧版本单选结构），
- * 在 parse 阶段做一次兼容和形状校验，校验失败直接退回到空数组，避免后续 .map 等 API 抛错。
- */
-function parseStoredMistakes(raw: string): MistakeItem[] {
-  const parsed = JSON.parse(raw) as unknown;
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed.flatMap((item, index) => {
-    if (!item || typeof item !== "object") return [];
-
-    const record = item as Record<string, unknown>;
-    const subject = record.subject;
-    if (typeof subject !== "string" || !SUBJECTS.includes(subject as Subject)) return [];
-
-    const knowledge =
-      Array.isArray(record.knowledge)
-        ? record.knowledge
-            .filter((value): value is string => typeof value === "string")
-            .map(normalizeSelectorText)
-            .filter(Boolean)
-        : typeof record.knowledge === "string"
-          ? [normalizeSelectorText(record.knowledge)].filter(Boolean)
-          : [];
-
-    const rawKnowledgeIds = Array.isArray(record.knowledgeIds)
-      ? record.knowledgeIds
-      : typeof record.knowledgeId === "string"
-        ? [record.knowledgeId]
-        : [];
-
-    const knowledgeIds = knowledge.map((_, knowledgeIndex) => {
-      const value = rawKnowledgeIds[knowledgeIndex];
-      return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-    });
-
-    return [
-      {
-        id:
-          typeof record.id === "string" && record.id.trim().length > 0
-            ? record.id
-            : `mistake-${Date.now()}-${index}`,
-        subject: subject as Subject,
-        source: typeof record.source === "string" ? record.source : "",
-        knowledge,
-        knowledgeIds,
-        reason: typeof record.reason === "string" ? record.reason : "",
-        skill: typeof record.skill === "string" ? record.skill : "",
-        skillId:
-          typeof record.skillId === "string" && record.skillId.trim().length > 0
-            ? record.skillId
-            : undefined,
-        solved: Boolean(record.solved),
-      },
-    ];
-  });
-}
-
 function normalizeKnowledgeSearchText(value: string): string {
   return value.replace(/\s+/g, "").toLowerCase();
 }
@@ -352,54 +277,22 @@ function findStructuredKnowledgeBySelection(
   });
 }
 
-function getSkillOptions(subject: Subject): string[] {
-  if (subject === "语文") {
-    return CHINESE_SKILL_LEAVES.map((item) => item.label);
-  }
-  if (subject === "英语") {
-    return ENGLISH_SKILL_LEAVES.map((item) => item.title);
-  }
-  return [];
-}
-
-function resolveSkillSelection(subject: Subject, rawValue: string): { label: string; id?: string } {
-  const value = rawValue.trim();
-  if (!value) return { label: "" };
-
-  if (subject === "语文") {
-    const matched = findChineseSkillLeafByTitle(value);
-    return {
-      label: matched?.label ?? value,
-      id: matched?.id,
-    };
-  }
-
-  if (subject === "英语") {
-    const matched = findEnglishSkillLeafByTitle(value);
-    return {
-      label: matched?.title ?? value,
-      id: matched?.id,
-    };
-  }
-
-  return { label: value };
-}
-
 export function MistakeBook({
   activeTab: externalActiveTab,
   onActiveTabChange,
   isExpanded = false,
   onExpandedChange,
 }: MistakeBookProps) {
+  const { user, loading: authLoading, configured } = useAuth();
   const [internalActiveTab, setInternalActiveTab] = useState<LearningTabKey>("mistakes");
   const [subject, setSubject] = useState<Subject>("数学");
-  // 错题列表交给 useLocalStorage 维护：首次渲染读默认值，挂载后从 LocalStorage 同步真实数据，
-  // 之后任何 setMistakes 引发的变更都会自动 JSON.stringify 写回。
-  const [mistakes, setMistakes, mounted] = useLocalStorage<MistakeItem[]>(
-    STORAGE_KEY,
+  // 未登录时继续沿用本地错题本；登录后切到 Supabase，并按 user_id 隔离数据。
+  const [localMistakes, setLocalMistakes, localMistakesMounted] = useLocalStorage<MistakeItem[]>(
+    MISTAKE_STORAGE_KEY,
     [],
     { parse: parseStoredMistakes }
   );
+  const cloudMistakes = useCloudMistakes(user?.id);
   const [timeManagementRecords, , timeRecordsMounted] = useLocalStorage<TimeManagementRecord[]>(
     TIME_MANAGEMENT_STORAGE_KEY,
     [],
@@ -413,11 +306,8 @@ export function MistakeBook({
   const [jumpTarget, setJumpTarget] = useState<JumpTarget>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [expandedEnglishKnowledgeNodes, setExpandedEnglishKnowledgeNodes] = useState<Record<string, boolean>>({});
-  const [expandedEnglishSkillNodes, setExpandedEnglishSkillNodes] = useState<Record<string, boolean>>({});
   const [activeChineseKnowledgeModuleId, setActiveChineseKnowledgeModuleId] = useState(CHINESE_DEFAULT_MODULE_ID);
   const [selectedChineseKnowledgeCategoryId, setSelectedChineseKnowledgeCategoryId] = useState<string | null>(null);
-  const [activeChineseSkillModuleId, setActiveChineseSkillModuleId] = useState(CHINESE_DEFAULT_MODULE_ID);
-  const [selectedChineseSkillCategoryId, setSelectedChineseSkillCategoryId] = useState<string | null>(null);
   /** 结构化科目：null 为目录；化学为条目 id，其余科目为 chapter 字符串 */
   const [selectedKnowledgeDirectoryKey, setSelectedKnowledgeDirectoryKey] = useState<string | null>(null);
 
@@ -434,8 +324,13 @@ export function MistakeBook({
   const [scoreEditorError, setScoreEditorError] = useState<string | null>(null);
 
   const knowledgeRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const skillRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const importedLocalMistakesForUserRef = useRef<string | null>(null);
   const activeTab = externalActiveTab ?? internalActiveTab;
+  const usingCloudMistakes = Boolean(user);
+  const waitingForAuth = configured && authLoading;
+  const mistakes = usingCloudMistakes ? cloudMistakes.mistakes : localMistakes;
+  const setMistakes = usingCloudMistakes ? cloudMistakes.setMistakes : setLocalMistakes;
+  const mistakesMounted = waitingForAuth ? false : usingCloudMistakes ? cloudMistakes.ready : localMistakesMounted;
 
   const changeActiveTab = (nextTab: LearningTabKey) => {
     setInternalActiveTab(nextTab);
@@ -454,7 +349,6 @@ export function MistakeBook({
     }
     return knowledgePoints[subject].map((item) => item.title);
   }, [subject, structuredKnowledge]);
-  const skillOptions = useMemo(() => getSkillOptions(subject), [subject]);
   const knowledgeMistakeCounts = useMemo(() => {
     const counts = Object.fromEntries(currentKnowledge.map((item) => [item.id, 0])) as Record<string, number>;
     const knownKnowledgeIds = new Set(currentKnowledge.map((item) => item.id));
@@ -594,7 +488,47 @@ export function MistakeBook({
       isValid,
     };
   }, [scoreEditor]);
-  const allDataMounted = mounted && timeRecordsMounted && scoreRecordsMounted;
+  const cloudSyncStatus = useMemo(() => {
+    if (!configured) {
+      return "当前还是本地错题本模式。配置 Supabase 后，不同学生登录会读取各自账号下的错题。";
+    }
+    if (authLoading) {
+      return "正在检查登录状态...";
+    }
+    if (!user) {
+      return "未登录时，错题仍保存在当前浏览器；登录后会自动切换到个人云端错题本。";
+    }
+    if (cloudMistakes.error) {
+      return `云端同步失败：${cloudMistakes.error}`;
+    }
+    if (cloudMistakes.saving) {
+      return "正在同步你的错题到云端...";
+    }
+    return `已登录 ${user.email ?? "当前账号"}，新保存的错题会进入你的个人云端数据库。`;
+  }, [authLoading, cloudMistakes.error, cloudMistakes.saving, configured, user]);
+  const allDataMounted = mistakesMounted && timeRecordsMounted && scoreRecordsMounted;
+
+  useEffect(() => {
+    if (!user?.id) {
+      importedLocalMistakesForUserRef.current = null;
+      return;
+    }
+    if (!cloudMistakes.ready || !localMistakesMounted) return;
+    if (importedLocalMistakesForUserRef.current === user.id) return;
+
+    importedLocalMistakesForUserRef.current = user.id;
+
+    if (cloudMistakes.mistakes.length > 0 || localMistakes.length === 0) {
+      return;
+    }
+
+    cloudMistakes.setMistakes(localMistakes);
+  }, [
+    cloudMistakes,
+    localMistakes,
+    localMistakesMounted,
+    user?.id,
+  ]);
 
   /** 化学等：条目级详情沉浸式阅读，隐藏顶部分区与学科切换 */
   const knowledgeImmersiveDetail =
@@ -622,11 +556,11 @@ export function MistakeBook({
 
   useEffect(() => {
     if (!jumpTarget) return;
-    const { type, id } = jumpTarget;
+    const { id } = jumpTarget;
     let done = false;
     const tryScroll = () => {
       if (done) return;
-      const el = type === "knowledge" ? knowledgeRefs.current[id] : skillRefs.current[id];
+      const el = knowledgeRefs.current[id];
       if (!el) return;
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       setHighlightId(id);
@@ -672,7 +606,6 @@ export function MistakeBook({
     const resolvedKnowledge = nextKnowledge.map((item) =>
       resolveKnowledgeSelection(subject, structuredKnowledge, item)
     );
-    const resolvedSkill = resolveSkillSelection(subject, skill);
 
     setMistakes((prev) => [
       {
@@ -682,8 +615,7 @@ export function MistakeBook({
         knowledge: resolvedKnowledge.map((item) => item.label),
         knowledgeIds: resolvedKnowledge.map((item) => item.id),
         reason: reason.trim(),
-        skill: resolvedSkill.label,
-        skillId: resolvedSkill.id,
+        skill: skill.trim(),
         solved: false,
       },
       ...prev,
@@ -815,7 +747,7 @@ export function MistakeBook({
         }
         return next;
       });
-      setJumpTarget({ type: "knowledge", id: entry.id });
+      setJumpTarget({ id: entry.id });
       return;
     }
 
@@ -825,7 +757,7 @@ export function MistakeBook({
 
       setActiveChineseKnowledgeModuleId(entry.moduleId);
       setSelectedChineseKnowledgeCategoryId(entry.categoryId);
-      setJumpTarget({ type: "knowledge", id: entry.id });
+      setJumpTarget({ id: entry.id });
       return;
     }
 
@@ -840,45 +772,13 @@ export function MistakeBook({
         );
       }
     }
-    if (targetId) setJumpTarget({ type: "knowledge", id: targetId });
-  };
-
-  const handleSkillJump = (item: MistakeItem) => {
-    if (item.subject !== "语文" && item.subject !== "英语") return;
-
-    setSubject(item.subject);
-    changeActiveTab("skills");
-
-    if (item.subject === "英语") {
-      const entry = (item.skillId ? findEnglishSkillLeafById(item.skillId) : undefined) ?? findEnglishSkillLeafByTitle(item.skill);
-      if (!entry) return;
-
-      setExpandedEnglishSkillNodes((prev) => {
-        const next = { ...prev };
-        for (const id of entry.pathIds) {
-          next[id] = true;
-        }
-        return next;
-      });
-      setJumpTarget({ type: "skill", id: entry.id });
-      return;
-    }
-
-    if (item.subject === "语文") {
-      const entry = (item.skillId ? findChineseSkillLeafById(item.skillId) : undefined) ?? findChineseSkillLeafByTitle(item.skill);
-      if (!entry) return;
-
-      setActiveChineseSkillModuleId(entry.moduleId);
-      setSelectedChineseSkillCategoryId(entry.categoryId);
-      setJumpTarget({ type: "skill", id: entry.id });
-      return;
-    }
+    if (targetId) setJumpTarget({ id: targetId });
   };
 
   return (
     <section className="frosted-card flex min-h-0 flex-1 flex-col p-6 lg:p-8">
       <div
-        className={`flex flex-col gap-4 pb-4 sm:flex-row sm:items-end sm:justify-between ${
+        className={`flex flex-col gap-4 pb-4 sm:flex-row sm:items-start sm:justify-between ${
           knowledgeImmersiveDetail ? "border-0 pb-3" : "border-b border-border/80"
         }`}
       >
@@ -903,16 +803,32 @@ export function MistakeBook({
               待巩固 {pendingCount} 题 · 共记录 {mistakes.length} 题
             </p>
           )}
+          {!knowledgeImmersiveDetail ? (
+            <p
+              className={`mt-2 max-w-2xl text-xs ${
+                usingCloudMistakes && cloudMistakes.error
+                  ? "text-rose-600 dark:text-rose-300"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {cloudSyncStatus}
+            </p>
+          ) : null}
         </div>
-        {!knowledgeImmersiveDetail && onExpandedChange ? (
-          <button
-            type="button"
-            onClick={() => onExpandedChange(!isExpanded)}
-            aria-pressed={isExpanded}
-            className="inline-flex shrink-0 items-center justify-center rounded-full border border-border/80 bg-card px-4 py-2 text-sm font-medium text-foreground transition hover:border-accent/55 hover:bg-accent-soft/25"
-          >
-            {isExpanded ? "恢复双栏布局" : "展开学习功能栏"}
-          </button>
+        {!knowledgeImmersiveDetail ? (
+          <div className="flex shrink-0 flex-col items-stretch gap-3 sm:items-end">
+            <AuthHeader />
+            {onExpandedChange ? (
+              <button
+                type="button"
+                onClick={() => onExpandedChange(!isExpanded)}
+                aria-pressed={isExpanded}
+                className="inline-flex shrink-0 items-center justify-center rounded-full border border-border/80 bg-card px-4 py-2 text-sm font-medium text-foreground transition hover:border-accent/55 hover:bg-accent-soft/25"
+              >
+                {isExpanded ? "恢复双栏布局" : "展开学习功能栏"}
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -1065,13 +981,15 @@ export function MistakeBook({
                 placeholder="例如：忽略了定义域限制，导致范围判断错误"
               />
             </div>
-            <CreatableSelect
-              label="解题技巧"
-              value={skill}
-              onChange={setSkill}
-              options={skillOptions}
-              placeholder={skillOptions.length > 0 ? "可搜索或自定义输入" : "可直接输入解题提醒"}
-            />
+            <div>
+              <label className="text-sm text-muted-foreground">解题技巧</label>
+              <input
+                value={skill}
+                onChange={(event) => setSkill(event.target.value)}
+                placeholder="可直接输入本题的解题提醒"
+                className="mt-2 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-accent/70"
+              />
+            </div>
             <button className="h-10 rounded-xl bg-foreground text-background text-sm font-medium">保存错题</button>
           </form>
 
@@ -1112,19 +1030,9 @@ export function MistakeBook({
                         知识点：{knowledgeLabel}
                       </button>
                     ))}
-                    {item.subject === "语文" || item.subject === "英语" ? (
-                      <button
-                        type="button"
-                        onClick={() => handleSkillJump(item)}
-                        className="rounded-full border border-accent/55 bg-accent-soft px-2.5 py-1 text-xs"
-                      >
-                        技巧：{item.skill}
-                      </button>
-                    ) : (
-                      <span className="rounded-full border border-accent/55 bg-accent-soft px-2.5 py-1 text-xs">
-                        技巧：{item.skill}
-                      </span>
-                    )}
+                    <span className="rounded-full border border-accent/55 bg-accent-soft px-2.5 py-1 text-xs">
+                      技巧：{item.skill}
+                    </span>
                   </div>
                 </article>
               ))
@@ -1216,35 +1124,6 @@ export function MistakeBook({
             </div>
           )}
         </div>
-      ) : null}
-
-      {activeTab === "skills" ? (
-        subject === "语文" ? (
-          <ChineseSkillPanel
-            activeModuleId={activeChineseSkillModuleId}
-            onActiveModuleIdChange={setActiveChineseSkillModuleId}
-            selectedCategoryId={selectedChineseSkillCategoryId}
-            onSelectedCategoryIdChange={setSelectedChineseSkillCategoryId}
-            highlightId={highlightId}
-            skillRefs={skillRefs}
-          />
-        ) : subject === "英语" ? (
-          <EnglishKnowledgePanel
-            tree={ENGLISH_SKILL_TREE}
-            expandedNodeIds={expandedEnglishSkillNodes}
-            setExpandedNodeIds={setExpandedEnglishSkillNodes}
-            highlightId={highlightId}
-            knowledgeRefs={skillRefs}
-            knowledgeFrequencies={{}}
-          />
-        ) : (
-          <div className="mt-5 rounded-2xl border border-dashed border-border/80 bg-card/70 px-5 py-8 text-center">
-            <p className="text-sm font-medium text-foreground">当前学科暂不提供解题技巧导航。</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              仍可在错题记录中自由填写解题提醒，便于后续复盘。
-            </p>
-          </div>
-        )
       ) : null}
 
       {activeTab === "time-management" ? (
