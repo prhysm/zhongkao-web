@@ -3,7 +3,6 @@ import { SUBJECTS, Subject } from "@/lib/mockData";
 export type LearningTabKey =
   | "mistakes"
   | "knowledge"
-  | "skills"
   | "time-management"
   | "score-stats"
   | "diagnostics";

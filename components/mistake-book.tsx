@@ -4,11 +4,9 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   getStructuredKnowledge,
   knowledgePoints,
-  solvingSkills,
   SUBJECTS,
   Subject,
   KnowledgePoint,
-  SolvingSkill,
   StructuredKnowledgeItem,
   usesItemIdKnowledgeDirectory,
 } from "@/lib/mockData";
@@ -24,6 +22,7 @@ import { ChineseKnowledgePanel, ChineseSkillPanel } from "@/components/chinese-k
 import { LearningDiagnosticsDashboard } from "@/components/learning-diagnostics-dashboard";
 import {
   ENGLISH_KNOWLEDGE_TREE,
+  ENGLISH_SKILL_LEAVES,
   ENGLISH_SKILL_TREE,
   findEnglishKnowledgeLeafById,
   findEnglishKnowledgeLeafByTitle,
@@ -78,12 +77,6 @@ const CHINESE_KNOWLEDGE_POINTS: KnowledgePoint[] = CHINESE_KNOWLEDGE_LEAVES.map(
     item.answeringStrategy[0] ??
     item.universalTemplate[0] ??
     item.pathLabel,
-}));
-
-const CHINESE_SOLVING_SKILLS: SolvingSkill[] = CHINESE_SKILL_LEAVES.map((item) => ({
-  id: item.id,
-  label: item.label,
-  detail: item.detail,
 }));
 
 type MistakeBookProps = {
@@ -291,13 +284,6 @@ function parseStoredMistakes(raw: string): MistakeItem[] {
   });
 }
 
-function flattenSkills(subject: Subject): SolvingSkill[] {
-  if (subject === "语文") {
-    return CHINESE_SOLVING_SKILLS;
-  }
-  return Object.values(solvingSkills[subject]).flat();
-}
-
 function normalizeKnowledgeSearchText(value: string): string {
   return value.replace(/\s+/g, "").toLowerCase();
 }
@@ -366,6 +352,39 @@ function findStructuredKnowledgeBySelection(
   });
 }
 
+function getSkillOptions(subject: Subject): string[] {
+  if (subject === "语文") {
+    return CHINESE_SKILL_LEAVES.map((item) => item.label);
+  }
+  if (subject === "英语") {
+    return ENGLISH_SKILL_LEAVES.map((item) => item.title);
+  }
+  return [];
+}
+
+function resolveSkillSelection(subject: Subject, rawValue: string): { label: string; id?: string } {
+  const value = rawValue.trim();
+  if (!value) return { label: "" };
+
+  if (subject === "语文") {
+    const matched = findChineseSkillLeafByTitle(value);
+    return {
+      label: matched?.label ?? value,
+      id: matched?.id,
+    };
+  }
+
+  if (subject === "英语") {
+    const matched = findEnglishSkillLeafByTitle(value);
+    return {
+      label: matched?.title ?? value,
+      id: matched?.id,
+    };
+  }
+
+  return { label: value };
+}
+
 export function MistakeBook({
   activeTab: externalActiveTab,
   onActiveTabChange,
@@ -425,7 +444,6 @@ export function MistakeBook({
 
   const currentKnowledge = subject === "语文" ? CHINESE_KNOWLEDGE_POINTS : knowledgePoints[subject];
   const structuredKnowledge = getStructuredKnowledge(subject);
-  const currentSkillGroups = solvingSkills[subject];
 
   const knowledgeOptions = useMemo(() => {
     if (subject === "语文") {
@@ -436,10 +454,7 @@ export function MistakeBook({
     }
     return knowledgePoints[subject].map((item) => item.title);
   }, [subject, structuredKnowledge]);
-  const skillOptions = useMemo(
-    () => flattenSkills(subject).map((item) => item.label),
-    [subject]
-  );
+  const skillOptions = useMemo(() => getSkillOptions(subject), [subject]);
   const knowledgeMistakeCounts = useMemo(() => {
     const counts = Object.fromEntries(currentKnowledge.map((item) => [item.id, 0])) as Record<string, number>;
     const knownKnowledgeIds = new Set(currentKnowledge.map((item) => item.id));
@@ -657,7 +672,7 @@ export function MistakeBook({
     const resolvedKnowledge = nextKnowledge.map((item) =>
       resolveKnowledgeSelection(subject, structuredKnowledge, item)
     );
-    const matchedSkill = flattenSkills(subject).find((item) => item.label === skill.trim());
+    const resolvedSkill = resolveSkillSelection(subject, skill);
 
     setMistakes((prev) => [
       {
@@ -667,8 +682,8 @@ export function MistakeBook({
         knowledge: resolvedKnowledge.map((item) => item.label),
         knowledgeIds: resolvedKnowledge.map((item) => item.id),
         reason: reason.trim(),
-        skill: skill.trim(),
-        skillId: matchedSkill?.id,
+        skill: resolvedSkill.label,
+        skillId: resolvedSkill.id,
         solved: false,
       },
       ...prev,
@@ -829,6 +844,8 @@ export function MistakeBook({
   };
 
   const handleSkillJump = (item: MistakeItem) => {
+    if (item.subject !== "语文" && item.subject !== "英语") return;
+
     setSubject(item.subject);
     changeActiveTab("skills");
 
@@ -855,10 +872,6 @@ export function MistakeBook({
       setSelectedChineseSkillCategoryId(entry.categoryId);
       setJumpTarget({ type: "skill", id: entry.id });
       return;
-    }
-
-    if (item.skillId) {
-      setJumpTarget({ type: "skill", id: item.skillId });
     }
   };
 
@@ -910,7 +923,6 @@ export function MistakeBook({
               {[
                 { key: "mistakes", label: "错题本" },
                 { key: "knowledge", label: "知识点" },
-                { key: "skills", label: "解题技巧" },
                 { key: "time-management", label: "时间管理" },
                 { key: "score-stats", label: "得分统计" },
                 { key: "diagnostics", label: "学情诊断" },
@@ -1058,7 +1070,7 @@ export function MistakeBook({
               value={skill}
               onChange={setSkill}
               options={skillOptions}
-              placeholder="可搜索或自定义输入"
+              placeholder={skillOptions.length > 0 ? "可搜索或自定义输入" : "可直接输入解题提醒"}
             />
             <button className="h-10 rounded-xl bg-foreground text-background text-sm font-medium">保存错题</button>
           </form>
@@ -1100,13 +1112,19 @@ export function MistakeBook({
                         知识点：{knowledgeLabel}
                       </button>
                     ))}
-                    <button
-                      type="button"
-                      onClick={() => handleSkillJump(item)}
-                      className="rounded-full border border-accent/55 bg-accent-soft px-2.5 py-1 text-xs"
-                    >
-                      技巧：{item.skill}
-                    </button>
+                    {item.subject === "语文" || item.subject === "英语" ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSkillJump(item)}
+                        className="rounded-full border border-accent/55 bg-accent-soft px-2.5 py-1 text-xs"
+                      >
+                        技巧：{item.skill}
+                      </button>
+                    ) : (
+                      <span className="rounded-full border border-accent/55 bg-accent-soft px-2.5 py-1 text-xs">
+                        技巧：{item.skill}
+                      </span>
+                    )}
                   </div>
                 </article>
               ))
@@ -1220,29 +1238,11 @@ export function MistakeBook({
             knowledgeFrequencies={{}}
           />
         ) : (
-          <div className="mt-5 space-y-4">
-            {Object.entries(currentSkillGroups).map(([typeName, list]) => (
-              <section key={typeName}>
-                <h3 className="text-sm font-semibold">{typeName}</h3>
-                <div className="mt-2 space-y-2">
-                  {list.map((item) => (
-                    <div
-                      key={item.id}
-                      id={item.id}
-                      ref={(el) => {
-                        skillRefs.current[item.id] = el;
-                      }}
-                      className={`rounded-2xl border bg-card p-4 transition ${
-                        highlightId === item.id ? "border-accent shadow-[0_0_0_2px_rgba(111,149,255,0.28)]" : "border-border/90"
-                      }`}
-                    >
-                      <p className="text-sm font-medium">{item.label}</p>
-                      <p className="mt-2 text-sm text-muted-foreground">{item.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+          <div className="mt-5 rounded-2xl border border-dashed border-border/80 bg-card/70 px-5 py-8 text-center">
+            <p className="text-sm font-medium text-foreground">当前学科暂不提供解题技巧导航。</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              仍可在错题记录中自由填写解题提醒，便于后续复盘。
+            </p>
           </div>
         )
       ) : null}
