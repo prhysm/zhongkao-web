@@ -10,7 +10,6 @@ import {
   StructuredKnowledgeItem,
   usesItemIdKnowledgeDirectory,
 } from "@/lib/mockData";
-import { useLocalStorage } from "@/lib/useLocalStorage";
 import { CreatableMultiSelect } from "@/components/selectors";
 import { AuthHeader } from "@/components/auth-header";
 import {
@@ -38,17 +37,12 @@ import { getKnowledgeFrequencyMeta } from "@/lib/knowledge-frequency";
 import {
   FOCUS_EXAM_SUBJECTS,
   LearningTabKey,
-  SCORE_STATS_STORAGE_KEY,
   ScoreRecord,
-  TIME_MANAGEMENT_STORAGE_KEY,
   TimeManagementRecord,
-  parseStoredScoreRecords,
-  parseStoredTimeManagementRecords,
 } from "@/lib/study-data";
 import { getFocusExamTemplateBySubjectLabel } from "@/lib/focus-exams";
-import { MISTAKE_STORAGE_KEY, parseStoredMistakes, type MistakeItem } from "@/lib/mistakes-model";
-import { useAuth } from "@/lib/auth-context";
-import { useCloudMistakes } from "@/lib/use-cloud-mistakes";
+import { type MistakeItem } from "@/lib/mistakes-model";
+import { useStudyRecords } from "@/lib/study-records-context";
 
 type JumpTarget = { id: string } | null;
 
@@ -84,6 +78,50 @@ type ScoreEditorState = {
   recordedAt: string;
   blocks: EditableScoreBlock[];
 };
+
+type StudyRecordsSnapshot = ReturnType<typeof useStudyRecords>;
+
+type MistakeBookContentProps = MistakeBookProps &
+  Omit<StudyRecordsSnapshot, "mistakes"> & {
+    mistakes?: MistakeItem[];
+  };
+
+function normalizeMistakeEntries(mistakes: MistakeItem[] = []): MistakeItem[] {
+  return mistakes.map((item) => {
+    const knowledge = Array.isArray(item.knowledge)
+      ? item.knowledge.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : [];
+    const rawKnowledgeIds = Array.isArray(item.knowledgeIds) ? item.knowledgeIds : [];
+
+    return {
+      ...item,
+      knowledge,
+      knowledgeIds: knowledge.map((_, knowledgeIndex) => {
+        const value = rawKnowledgeIds[knowledgeIndex];
+        return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+      }),
+    };
+  });
+}
+
+function MistakeBookLoadingSkeleton() {
+  return (
+    <section className="frosted-card flex min-h-0 flex-1 flex-col p-6 lg:p-8">
+      <div className="border-b border-border/80 pb-5">
+        <h2 className="text-2xl font-semibold tracking-wide">学习功能栏</h2>
+        <p className="mt-1 text-sm text-muted-foreground">正在同步错题数据...</p>
+      </div>
+      <div className="mt-5 space-y-4">
+        <div className="h-10 rounded-full border border-border/70 bg-card/70" />
+        <div className="grid gap-3">
+          <div className="h-10 rounded-xl border border-border/70 bg-card/70" />
+          <div className="h-24 rounded-2xl border border-border/70 bg-card/70" />
+          <div className="h-24 rounded-2xl border border-border/70 bg-card/70" />
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function formatMinutesFromSeconds(totalSeconds: number): string {
   const rounded = Math.round((Math.max(0, totalSeconds) / 60) * 10) / 10;
@@ -277,32 +315,42 @@ function findStructuredKnowledgeBySelection(
   });
 }
 
-export function MistakeBook({
+export function MistakeBook(props: MistakeBookProps) {
+  const studyRecords = useStudyRecords();
+  const hasMistakeArray = Array.isArray(studyRecords.mistakes);
+
+  if (!hasMistakeArray && !studyRecords.mistakesMounted) {
+    return <MistakeBookLoadingSkeleton />;
+  }
+
+  return (
+    <MistakeBookContent
+      {...props}
+      {...studyRecords}
+      mistakes={hasMistakeArray ? studyRecords.mistakes : []}
+    />
+  );
+}
+
+function MistakeBookContent({
   activeTab: externalActiveTab,
   onActiveTabChange,
   isExpanded = false,
   onExpandedChange,
-}: MistakeBookProps) {
-  const { user, loading: authLoading, configured } = useAuth();
+  mistakes = [],
+  setMistakes,
+  mistakesMounted,
+  timeManagementRecords = [],
+  timeRecordsMounted,
+  scoreRecords = [],
+  setScoreRecords,
+  scoreRecordsMounted,
+  usingCloudRecords,
+  syncError,
+  syncStatus,
+}: MistakeBookContentProps) {
   const [internalActiveTab, setInternalActiveTab] = useState<LearningTabKey>("mistakes");
   const [subject, setSubject] = useState<Subject>("数学");
-  // 未登录时继续沿用本地错题本；登录后切到 Supabase，并按 user_id 隔离数据。
-  const [localMistakes, setLocalMistakes, localMistakesMounted] = useLocalStorage<MistakeItem[]>(
-    MISTAKE_STORAGE_KEY,
-    [],
-    { parse: parseStoredMistakes }
-  );
-  const cloudMistakes = useCloudMistakes(user?.id);
-  const [timeManagementRecords, , timeRecordsMounted] = useLocalStorage<TimeManagementRecord[]>(
-    TIME_MANAGEMENT_STORAGE_KEY,
-    [],
-    { parse: parseStoredTimeManagementRecords }
-  );
-  const [scoreRecords, setScoreRecords, scoreRecordsMounted] = useLocalStorage<ScoreRecord[]>(
-    SCORE_STATS_STORAGE_KEY,
-    [],
-    { parse: parseStoredScoreRecords }
-  );
   const [jumpTarget, setJumpTarget] = useState<JumpTarget>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [expandedEnglishKnowledgeNodes, setExpandedEnglishKnowledgeNodes] = useState<Record<string, boolean>>({});
@@ -324,13 +372,8 @@ export function MistakeBook({
   const [scoreEditorError, setScoreEditorError] = useState<string | null>(null);
 
   const knowledgeRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const importedLocalMistakesForUserRef = useRef<string | null>(null);
   const activeTab = externalActiveTab ?? internalActiveTab;
-  const usingCloudMistakes = Boolean(user);
-  const waitingForAuth = configured && authLoading;
-  const mistakes = usingCloudMistakes ? cloudMistakes.mistakes : localMistakes;
-  const setMistakes = usingCloudMistakes ? cloudMistakes.setMistakes : setLocalMistakes;
-  const mistakesMounted = waitingForAuth ? false : usingCloudMistakes ? cloudMistakes.ready : localMistakesMounted;
+  const safeMistakes = useMemo(() => normalizeMistakeEntries(mistakes), [mistakes]);
 
   const changeActiveTab = (nextTab: LearningTabKey) => {
     setInternalActiveTab(nextTab);
@@ -364,11 +407,11 @@ export function MistakeBook({
       });
     }
 
-    mistakes.forEach((item) => {
+    safeMistakes.forEach((item) => {
       if (item.subject !== subject) return;
 
-      item.knowledge.forEach((label, knowledgeIndex) => {
-        const byId = item.knowledgeIds[knowledgeIndex];
+      (item.knowledge ?? []).forEach((label, knowledgeIndex) => {
+        const byId = item.knowledgeIds?.[knowledgeIndex];
         const resolvedId =
           (typeof byId === "string" && knownKnowledgeIds.has(byId) ? byId : null) ??
           normalizedTitleToId.get(normalizeSelectorText(label));
@@ -379,9 +422,9 @@ export function MistakeBook({
     });
 
     return counts;
-  }, [currentKnowledge, mistakes, structuredKnowledge, subject]);
+  }, [currentKnowledge, safeMistakes, structuredKnowledge, subject]);
 
-  const pendingCount = useMemo(() => mistakes.filter((item) => !item.solved).length, [mistakes]);
+  const pendingCount = useMemo(() => safeMistakes.filter((item) => !item.solved).length, [safeMistakes]);
   const timeManagementSubjects = useMemo(
     () => ["全部", ...new Set([...FOCUS_EXAM_SUBJECTS, ...timeManagementRecords.map((item) => item.subjectLabel)])],
     [timeManagementRecords]
@@ -488,47 +531,7 @@ export function MistakeBook({
       isValid,
     };
   }, [scoreEditor]);
-  const cloudSyncStatus = useMemo(() => {
-    if (!configured) {
-      return "当前还是本地错题本模式。配置 Supabase 后，不同学生登录会读取各自账号下的错题。";
-    }
-    if (authLoading) {
-      return "正在检查登录状态...";
-    }
-    if (!user) {
-      return "未登录时，错题仍保存在当前浏览器；登录后会自动切换到个人云端错题本。";
-    }
-    if (cloudMistakes.error) {
-      return `云端同步失败：${cloudMistakes.error}`;
-    }
-    if (cloudMistakes.saving) {
-      return "正在同步你的错题到云端...";
-    }
-    return `已登录 ${user.email ?? "当前账号"}，新保存的错题会进入你的个人云端数据库。`;
-  }, [authLoading, cloudMistakes.error, cloudMistakes.saving, configured, user]);
   const allDataMounted = mistakesMounted && timeRecordsMounted && scoreRecordsMounted;
-
-  useEffect(() => {
-    if (!user?.id) {
-      importedLocalMistakesForUserRef.current = null;
-      return;
-    }
-    if (!cloudMistakes.ready || !localMistakesMounted) return;
-    if (importedLocalMistakesForUserRef.current === user.id) return;
-
-    importedLocalMistakesForUserRef.current = user.id;
-
-    if (cloudMistakes.mistakes.length > 0 || localMistakes.length === 0) {
-      return;
-    }
-
-    cloudMistakes.setMistakes(localMistakes);
-  }, [
-    cloudMistakes,
-    localMistakes,
-    localMistakesMounted,
-    user?.id,
-  ]);
 
   /** 化学等：条目级详情沉浸式阅读，隐藏顶部分区与学科切换 */
   const knowledgeImmersiveDetail =
@@ -607,19 +610,22 @@ export function MistakeBook({
       resolveKnowledgeSelection(subject, structuredKnowledge, item)
     );
 
-    setMistakes((prev) => [
-      {
-        id: `mistake-${Date.now()}`,
-        subject,
-        source: source.trim(),
-        knowledge: resolvedKnowledge.map((item) => item.label),
-        knowledgeIds: resolvedKnowledge.map((item) => item.id),
-        reason: reason.trim(),
-        skill: skill.trim(),
-        solved: false,
-      },
-      ...prev,
-    ]);
+    setMistakes((prev) => {
+      const previousMistakes = Array.isArray(prev) ? prev : [];
+      return [
+        {
+          id: `mistake-${Date.now()}`,
+          subject,
+          source: source.trim(),
+          knowledge: resolvedKnowledge.map((item) => item.label),
+          knowledgeIds: resolvedKnowledge.map((item) => item.id),
+          reason: reason.trim(),
+          skill: skill.trim(),
+          solved: false,
+        },
+        ...previousMistakes,
+      ];
+    });
     setSource("");
     setKnowledge([]);
     setKnowledgeQuery("");
@@ -732,10 +738,10 @@ export function MistakeBook({
     setSubject(item.subject);
     changeActiveTab("knowledge");
 
-    const knowledgeLabel = item.knowledge[knowledgeIndex];
+    const knowledgeLabel = item.knowledge?.[knowledgeIndex];
     if (!knowledgeLabel) return;
 
-    const byId = item.knowledgeIds[knowledgeIndex];
+    const byId = item.knowledgeIds?.[knowledgeIndex] ?? null;
     if (item.subject === "英语") {
       const entry = (byId ? findEnglishKnowledgeLeafById(byId) : undefined) ?? findEnglishKnowledgeLeafByTitle(knowledgeLabel);
       if (!entry) return;
@@ -800,18 +806,18 @@ export function MistakeBook({
             </p>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">
-              待巩固 {pendingCount} 题 · 共记录 {mistakes.length} 题
+              待巩固 {pendingCount} 题 · 共记录 {safeMistakes.length} 题
             </p>
           )}
           {!knowledgeImmersiveDetail ? (
             <p
               className={`mt-2 max-w-2xl text-xs ${
-                usingCloudMistakes && cloudMistakes.error
+                usingCloudRecords && syncError
                   ? "text-rose-600 dark:text-rose-300"
                   : "text-muted-foreground"
               }`}
             >
-              {cloudSyncStatus}
+              {syncStatus}
             </p>
           ) : null}
         </div>
@@ -994,10 +1000,10 @@ export function MistakeBook({
           </form>
 
           <div className="mt-5 space-y-3">
-            {mistakes.length === 0 ? (
+            {safeMistakes.length === 0 ? (
               <p className="text-sm text-muted-foreground">还没有记录，先添加第一题。</p>
             ) : (
-              mistakes.map((item) => (
+              safeMistakes.map((item) => (
                 <article key={item.id} className="rounded-2xl border border-border/90 bg-card p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -1009,7 +1015,12 @@ export function MistakeBook({
                     <button
                       type="button"
                       onClick={() =>
-                        setMistakes((prev) => prev.map((x) => (x.id === item.id ? { ...x, solved: !x.solved } : x)))
+                        setMistakes((prev) => {
+                          const previousMistakes = Array.isArray(prev) ? prev : [];
+                          return previousMistakes.map((x) =>
+                            x.id === item.id ? { ...x, solved: !x.solved } : x
+                          );
+                        })
                       }
                       className="text-xs text-muted-foreground underline underline-offset-4"
                     >
@@ -1020,7 +1031,7 @@ export function MistakeBook({
                     <KnowledgeMarkdown markdown={item.reason} />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {item.knowledge.map((knowledgeLabel, knowledgeIndex) => (
+                    {(item.knowledge ?? []).map((knowledgeLabel, knowledgeIndex) => (
                       <button
                         key={`${item.id}-knowledge-${knowledgeLabel}-${knowledgeIndex}`}
                         type="button"

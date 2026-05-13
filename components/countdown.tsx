@@ -1,7 +1,6 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { useLocalStorage } from "@/lib/useLocalStorage";
 import {
   cloneFocusExamBlocks,
   DEFAULT_TEMPLATE,
@@ -11,10 +10,9 @@ import {
 import {
   FocusSessionEndReason,
   LearningTabKey,
-  TIME_MANAGEMENT_STORAGE_KEY,
   TimeManagementRecord,
-  parseStoredTimeManagementRecords,
 } from "@/lib/study-data";
+import { useStudyRecords } from "@/lib/study-records-context";
 
 const DEFAULT_TARGET = "2026-06-20T09:00";
 const STORAGE_KEY = "zhongkao-countdown-target";
@@ -140,6 +138,7 @@ export function Countdown({
   onFocusModeChange,
   onNavigateLearningTab,
 }: CountdownProps) {
+  const { setTimeManagementRecords } = useStudyRecords();
   const [targetDate, setTargetDate] = useState(DEFAULT_TARGET);
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({
     days: 0,
@@ -153,11 +152,6 @@ export function Countdown({
   const [runningExam, setRunningExam] = useState<RunningExam | null>(null);
   const [report, setReport] = useState<TimeManagementRecord | null>(null);
   const [examNow, setExamNow] = useState(() => Date.now());
-  const [, setTimeManagementRecords] = useLocalStorage<TimeManagementRecord[]>(
-    TIME_MANAGEMENT_STORAGE_KEY,
-    [],
-    { parse: parseStoredTimeManagementRecords }
-  );
 
   useEffect(() => {
     const syncStoredTarget = window.setTimeout(() => {
