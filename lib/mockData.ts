@@ -41,6 +41,12 @@ const unicodeSubscriptMap: Record<string, string> = {
   "₎": ")",
 };
 
+function normalizeBrokenTextCommand(text: string): string {
+  // 旧版 JSON 中若把 `\text{}` 写成 `\text{}` 的单反斜杠形式，
+  // JSON 解析时会把 `\t` 吃成制表符，最终在公式里显示成 `ext...`。
+  return text.replace(/\text\{/g, "\\text{");
+}
+
 function normalizeInlineLatex(text: string): string {
   return text.replace(/\$([^$]+)\$/g, (_match, body: string) => {
     const normalizedBody = body
@@ -56,12 +62,12 @@ function normalizeInlineLatex(text: string): string {
   });
 }
 
-function sanitizeChemistryKnowledgeItem(item: StructuredKnowledgeItem): StructuredKnowledgeItem {
+function sanitizeStructuredKnowledgeItem(item: StructuredKnowledgeItem): StructuredKnowledgeItem {
   return {
     ...item,
-    chapter: normalizeInlineLatex(item.chapter),
-    title: normalizeInlineLatex(item.title),
-    content: normalizeInlineLatex(item.content),
+    chapter: normalizeInlineLatex(normalizeBrokenTextCommand(item.chapter)),
+    title: normalizeInlineLatex(normalizeBrokenTextCommand(item.title)),
+    content: normalizeInlineLatex(normalizeBrokenTextCommand(item.content)),
   };
 }
 
@@ -74,12 +80,12 @@ export const KNOWLEDGE_POINTS: {
   跨学科: StructuredKnowledgeItem[];
   历史: StructuredKnowledgeItem[];
 } = {
-  物理: physicsKnowledgeJson as StructuredKnowledgeItem[],
-  数学: mathKnowledgeJson as StructuredKnowledgeItem[],
-  道法: polKnowledgeJson as StructuredKnowledgeItem[],
-  化学: (chemKnowledgeJson as StructuredKnowledgeItem[]).map(sanitizeChemistryKnowledgeItem),
-  跨学科: crossKnowledgeJson as StructuredKnowledgeItem[],
-  历史: historyKnowledgeJson as StructuredKnowledgeItem[],
+  物理: (physicsKnowledgeJson as StructuredKnowledgeItem[]).map(sanitizeStructuredKnowledgeItem),
+  数学: (mathKnowledgeJson as StructuredKnowledgeItem[]).map(sanitizeStructuredKnowledgeItem),
+  道法: (polKnowledgeJson as StructuredKnowledgeItem[]).map(sanitizeStructuredKnowledgeItem),
+  化学: (chemKnowledgeJson as StructuredKnowledgeItem[]).map(sanitizeStructuredKnowledgeItem),
+  跨学科: (crossKnowledgeJson as StructuredKnowledgeItem[]).map(sanitizeStructuredKnowledgeItem),
+  历史: (historyKnowledgeJson as StructuredKnowledgeItem[]).map(sanitizeStructuredKnowledgeItem),
 };
 
 export const STRUCTURED_KNOWLEDGE_SUBJECTS = ["物理", "数学", "道法", "化学", "跨学科", "历史"] as const satisfies readonly Subject[];

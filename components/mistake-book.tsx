@@ -220,6 +220,17 @@ function getScoreRateStyle(rate: number | null): {
   };
 }
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4.75 7.25h14.5" />
+      <path d="M9.25 3.75h5.5" />
+      <path d="M7.75 7.25v10.5a1.5 1.5 0 0 0 1.5 1.5h5.5a1.5 1.5 0 0 0 1.5-1.5V7.25" />
+      <path d="M10 10.5v5.25M14 10.5v5.25" />
+    </svg>
+  );
+}
+
 function buildEditableScoreBlocks(
   blocks: Array<{ id: string; label: string; score?: number; fullScore?: number }>
 ): EditableScoreBlock[] {
@@ -341,6 +352,7 @@ function MistakeBookContent({
   setMistakes,
   mistakesMounted,
   timeManagementRecords = [],
+  setTimeManagementRecords,
   timeRecordsMounted,
   scoreRecords = [],
   setScoreRecords,
@@ -370,6 +382,7 @@ function MistakeBookContent({
   const [scoreSubjectFilter, setScoreSubjectFilter] = useState<string>("语文");
   const [scoreEditor, setScoreEditor] = useState<ScoreEditorState | null>(null);
   const [scoreEditorError, setScoreEditorError] = useState<string | null>(null);
+  const [pendingDeleteTimeRecord, setPendingDeleteTimeRecord] = useState<TimeManagementRecord | null>(null);
 
   const knowledgeRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const activeTab = externalActiveTab ?? internalActiveTab;
@@ -732,6 +745,24 @@ function MistakeBookContent({
     if (scoreEditor?.recordId === recordId) {
       closeScoreEditor();
     }
+  };
+
+  const handleRequestDeleteTimeManagementRecord = (record: TimeManagementRecord) => {
+    setPendingDeleteTimeRecord(record);
+  };
+
+  const handleConfirmDeleteTimeManagementRecord = () => {
+    if (!pendingDeleteTimeRecord) return;
+
+    const recordId = pendingDeleteTimeRecord.id;
+    setTimeManagementRecords((prev) => prev.filter((record) => record.id !== recordId));
+    setScoreRecords((prev) => prev.filter((record) => record.timeManagementRecordId !== recordId));
+
+    if (scoreEditor?.timeManagementRecordId === recordId) {
+      closeScoreEditor();
+    }
+
+    setPendingDeleteTimeRecord(null);
   };
 
   const handleKnowledgeJump = (item: MistakeItem, knowledgeIndex: number) => {
@@ -1167,7 +1198,7 @@ function MistakeBookContent({
 
           {filteredTimeManagementRecords.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/80 bg-card/70 px-5 py-8 text-center">
-              <p className="text-sm font-medium text-foreground">还没有模拟考时间记录。</p>
+              <p className="text-sm font-medium text-foreground">暂无历史记录，去进行一次模拟考吧</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 从左侧点击“开启模拟考”并完成一次考试后，这里会自动按学科沉淀时间数据。
               </p>
@@ -1189,8 +1220,17 @@ function MistakeBookContent({
                   const overallRateStyle = getScoreRateStyle(overallRate);
 
                   return (
-                    <article key={record.id} className="rounded-2xl border border-border/90 bg-card p-5">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <article key={record.id} className="group relative rounded-2xl border border-border/90 bg-card p-5">
+                      <button
+                        type="button"
+                        onClick={() => handleRequestDeleteTimeManagementRecord(record)}
+                        aria-label={`删除 ${record.subjectLabel} ${formatRecordDate(record.endedAt)} 的考试记录`}
+                        title="删除记录"
+                        className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-background/35 text-muted-foreground/70 opacity-55 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-700 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/35 dark:hover:text-red-300"
+                      >
+                        <TrashIcon />
+                      </button>
+                      <div className="flex flex-col gap-3 pr-10 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className="text-sm font-semibold text-foreground">{formatRecordDate(record.endedAt)}</p>
                           <p className="mt-1 text-sm text-muted-foreground">
@@ -1531,6 +1571,54 @@ function MistakeBookContent({
           subjectLabel={scoreSubjectFilter}
           timeManagementRecords={timeManagementRecords}
         />
+      ) : null}
+
+      {pendingDeleteTimeRecord ? (
+        <div
+          className="fixed inset-0 z-[80] overflow-y-auto bg-background/75 p-4 backdrop-blur-sm"
+          onClick={() => setPendingDeleteTimeRecord(null)}
+        >
+          <div className="mx-auto flex min-h-full w-full max-w-2xl items-center justify-center">
+            <div
+              className="frosted-card my-4 w-full max-w-md overflow-hidden"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-border/80 px-6 py-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300">
+                    <TrashIcon />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm tracking-[0.18em] uppercase text-muted-foreground">删除考试记录</p>
+                    <h3 className="mt-2 text-xl font-semibold text-foreground">确定要删除这条考试记录吗？</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      删除后相关统计数据将同步更新且不可恢复。
+                    </p>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {pendingDeleteTimeRecord.subjectLabel} · {formatRecordDate(pendingDeleteTimeRecord.endedAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={() => setPendingDeleteTimeRecord(null)}
+                  className="rounded-xl border border-border/80 bg-card px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-accent/45 hover:text-foreground"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteTimeManagementRecord}
+                  className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-500/15 dark:text-red-300"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {scoreEditor ? (
