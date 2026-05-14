@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#3b6cff" />
+    <title>离线 · 中考冲刺</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+        background: #fafafa;
+        color: #171717;
+        padding: 1.5rem;
+        text-align: center;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #080808;
+          color: #fafafa;
+        }
+      }
+      h1 {
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem;
+      }
+      p {
+        margin: 0 0 1.25rem;
+        font-size: 0.9375rem;
+        opacity: 0.85;
+        line-height: 1.5;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+        border: none;
+        border-radius: 0.5rem;
+        padding: 0.6rem 1.1rem;
+        background: #3b6cff;
+        color: #fff;
+      }
+      button:active {
+        opacity: 0.92;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h1>当前无法连接网络</h1>
+      <p>请检查网络后重试。已安装的「中考冲刺」会在恢复网络后自动可用。</p>
+      <button type="button" onclick="location.reload()">重新加载</button>
+    </div>
+  </body>
+</html>
