@@ -437,7 +437,11 @@ function MistakeBookContent({
     return counts;
   }, [currentKnowledge, safeMistakes, structuredKnowledge, subject]);
 
-  const pendingCount = useMemo(() => safeMistakes.filter((item) => !item.solved).length, [safeMistakes]);
+  const subjectMistakes = useMemo(
+    () => safeMistakes.filter((item) => item.subject === subject),
+    [safeMistakes, subject]
+  );
+  const pendingCount = useMemo(() => subjectMistakes.filter((item) => !item.solved).length, [subjectMistakes]);
   const timeManagementSubjects = useMemo(
     () => ["全部", ...new Set([...FOCUS_EXAM_SUBJECTS, ...timeManagementRecords.map((item) => item.subjectLabel)])],
     [timeManagementRecords]
@@ -837,7 +841,7 @@ function MistakeBookContent({
             </p>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">
-              待巩固 {pendingCount} 题 · 共记录 {safeMistakes.length} 题
+              待巩固 {pendingCount} 题 · {subject} 共记录 {subjectMistakes.length} 题
             </p>
           )}
           {!knowledgeImmersiveDetail ? (
@@ -1031,10 +1035,10 @@ function MistakeBookContent({
           </form>
 
           <div className="mt-5 space-y-3">
-            {safeMistakes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">还没有记录，先添加第一题。</p>
+            {subjectMistakes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">当前学科还没有记录，先添加第一题。</p>
             ) : (
-              safeMistakes.map((item) => (
+              subjectMistakes.map((item) => (
                 <article key={item.id} className="rounded-2xl border border-border/90 bg-card p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
