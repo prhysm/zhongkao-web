@@ -5,12 +5,16 @@
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 3000",
     "build": "next build",
+    "build:mobile": "next build && npx cap sync android",
+    "open:android": "npx cap open android",
     "start": "next start",
     "lint": "eslint",
     "extract:math": "python3 scripts/extract_math_docx.py",
     "extract:physics": "python3 scripts/extract_physics_docx.py"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
     "@supabase/supabase-js": "^2.105.4",
     "katex": "^0.16.45",
     "next": "16.2.5",
@@ -25,6 +29,7 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

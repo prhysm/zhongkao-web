@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Zhongkao Review app icon</title>
+  <desc id="desc">A deep blue education app icon with an open book and a gold check mark.</desc>
+  <defs>
+    <linearGradient id="bg" x1="180" y1="140" x2="860" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3F73FF" />
+      <stop offset="100%" stop-color="#1D3FB4" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(512 286) rotate(90) scale(340)" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.24" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect x="80" y="80" width="864" height="864" rx="220" fill="url(#bg)" />
+  <circle cx="512" cy="286" r="320" fill="url(#glow)" />
+  <path
+    fill="#FFFFFF"
+    d="M274 294c0-24 18-45 42-49l154-27c29-5 54 17 54 46v423c0 28-25 50-53 46l-156-22c-24-3-41-24-41-48V294Z" />
+  <path
+    fill="#FFFFFF"
+    d="M750 294c0-24-18-45-42-49l-154-27c-29-5-54 17-54 46v423c0 28 25 50 53 46l156-22c24-3 41-24 41-48V294Z" />
+  <rect x="494" y="240" width="36" height="470" rx="18" fill="#DCE8FF" opacity="0.96" />
+  <path
+    fill="#FFD56A"
+    d="M398 538c-17-17-45-17-62 0s-17 45 0 62l93 93c17 17 45 17 62 0l207-207c17-17 17-45 0-62s-45-17-62 0L460 599l-62-61Z" />
+</svg>

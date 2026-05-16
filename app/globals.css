@@ -17,6 +17,8 @@
   --tuner-blur-px: 16px;
   --tuner-glow-strength: 0.55;
   --tuner-radius: 24px;
+  --font-geist-sans: "SF Pro Text", "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --font-geist-mono: "SFMono-Regular", "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
 }
 
 html.dark {

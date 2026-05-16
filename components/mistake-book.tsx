@@ -383,6 +383,8 @@ function MistakeBookContent({
   const [scoreEditor, setScoreEditor] = useState<ScoreEditorState | null>(null);
   const [scoreEditorError, setScoreEditorError] = useState<string | null>(null);
   const [pendingDeleteTimeRecord, setPendingDeleteTimeRecord] = useState<TimeManagementRecord | null>(null);
+  const [editingMistakeId, setEditingMistakeId] = useState<string | null>(null);
+  const [pendingDeleteMistake, setPendingDeleteMistake] = useState<MistakeItem | null>(null);
 
   const knowledgeRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const activeTab = externalActiveTab ?? internalActiveTab;
@@ -614,6 +616,25 @@ function MistakeBookContent({
     return () => window.clearTimeout(timeoutId);
   }, [searchQuery]);
 
+  const resetMistakeForm = () => {
+    setEditingMistakeId(null);
+    setSource("");
+    setKnowledge([]);
+    setKnowledgeQuery("");
+    setReason("");
+    setSkill("");
+  };
+
+  const handleBeginEditMistake = (item: MistakeItem) => {
+    setSubject(item.subject);
+    setEditingMistakeId(item.id);
+    setSource(item.source);
+    setKnowledge(Array.isArray(item.knowledge) ? [...item.knowledge] : []);
+    setKnowledgeQuery("");
+    setReason(item.reason);
+    setSkill(item.skill);
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextKnowledge =
@@ -623,19 +644,36 @@ function MistakeBookContent({
 
     if (!source.trim() || nextKnowledge.length === 0 || !reason.trim() || !skill.trim()) return;
 
-    const resolvedKnowledge = nextKnowledge.map((item) =>
-      resolveKnowledgeSelection(subject, structuredKnowledge, item)
+    const resolvedKnowledge = nextKnowledge.map((entry) =>
+      resolveKnowledgeSelection(subject, structuredKnowledge, entry)
     );
 
     setMistakes((prev) => {
       const previousMistakes = Array.isArray(prev) ? prev : [];
+      if (editingMistakeId) {
+        const existing = previousMistakes.find((x) => x.id === editingMistakeId);
+        if (!existing) return previousMistakes;
+        return previousMistakes.map((x) =>
+          x.id === editingMistakeId
+            ? {
+                ...existing,
+                subject,
+                source: source.trim(),
+                knowledge: resolvedKnowledge.map((k) => k.label),
+                knowledgeIds: resolvedKnowledge.map((k) => k.id),
+                reason: reason.trim(),
+                skill: skill.trim(),
+              }
+            : x
+        );
+      }
       return [
         {
           id: `mistake-${Date.now()}`,
           subject,
           source: source.trim(),
-          knowledge: resolvedKnowledge.map((item) => item.label),
-          knowledgeIds: resolvedKnowledge.map((item) => item.id),
+          knowledge: resolvedKnowledge.map((k) => k.label),
+          knowledgeIds: resolvedKnowledge.map((k) => k.id),
           reason: reason.trim(),
           skill: skill.trim(),
           solved: false,
@@ -643,11 +681,24 @@ function MistakeBookContent({
         ...previousMistakes,
       ];
     });
-    setSource("");
-    setKnowledge([]);
-    setKnowledgeQuery("");
-    setReason("");
-    setSkill("");
+    resetMistakeForm();
+  };
+
+  const handleRequestDeleteMistake = (item: MistakeItem) => {
+    setPendingDeleteMistake(item);
+  };
+
+  const handleConfirmDeleteMistake = () => {
+    if (!pendingDeleteMistake) return;
+    const id = pendingDeleteMistake.id;
+    setMistakes((prev) => {
+      const previousMistakes = Array.isArray(prev) ? prev : [];
+      return previousMistakes.filter((x) => x.id !== id);
+    });
+    if (editingMistakeId === id) {
+      resetMistakeForm();
+    }
+    setPendingDeleteMistake(null);
   };
 
   const openScoreEditor = (options: {
@@ -992,6 +1043,18 @@ function MistakeBookContent({
       {activeTab === "mistakes" ? (
         <div>
           <form onSubmit={handleSubmit} className="mt-5 grid gap-4 rounded-2xl border border-border/80 bg-card p-4">
+            {editingMistakeId ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/35 bg-accent-soft/25 px-3 py-2 text-sm text-foreground">
+                <span>正在修改一条已有错题，保存后列表中的内容会同步更新。</span>
+                <button
+                  type="button"
+                  onClick={resetMistakeForm}
+                  className="shrink-0 rounded-lg border border-border/80 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-accent/45 hover:text-foreground"
+                >
+                  取消修改
+                </button>
+              </div>
+            ) : null}
             <div>
               <label className="text-sm text-muted-foreground">题目出处</label>
               <input
@@ -1031,7 +1094,9 @@ function MistakeBookContent({
                 className="mt-2 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-accent/70"
               />
             </div>
-            <button className="h-10 rounded-xl bg-foreground text-background text-sm font-medium">保存错题</button>
+            <button type="submit" className="h-10 rounded-xl bg-foreground text-background text-sm font-medium">
+              {editingMistakeId ? "保存修改" : "保存错题"}
+            </button>
           </form>
 
           <div className="mt-5 space-y-3">
@@ -1040,27 +1105,43 @@ function MistakeBookContent({
             ) : (
               subjectMistakes.map((item) => (
                 <article key={item.id} className="rounded-2xl border border-border/90 bg-card p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
                       <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">
                         {item.subject}
                       </span>
-                      <span className="text-xs text-muted-foreground">{item.source}</span>
+                      <span className="truncate text-xs text-muted-foreground">{item.source}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setMistakes((prev) => {
-                          const previousMistakes = Array.isArray(prev) ? prev : [];
-                          return previousMistakes.map((x) =>
-                            x.id === item.id ? { ...x, solved: !x.solved } : x
-                          );
-                        })
-                      }
-                      className="text-xs text-muted-foreground underline underline-offset-4"
-                    >
-                      {item.solved ? "标记未掌握" : "标记已掌握"}
-                    </button>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                      <button
+                        type="button"
+                        onClick={() => handleBeginEditMistake(item)}
+                        className="text-xs text-muted-foreground underline underline-offset-4"
+                      >
+                        修改
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRequestDeleteMistake(item)}
+                        className="text-xs text-red-600 underline underline-offset-4 dark:text-red-400"
+                      >
+                        删除
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMistakes((prev) => {
+                            const previousMistakes = Array.isArray(prev) ? prev : [];
+                            return previousMistakes.map((x) =>
+                              x.id === item.id ? { ...x, solved: !x.solved } : x
+                            );
+                          })
+                        }
+                        className="text-xs text-muted-foreground underline underline-offset-4"
+                      >
+                        {item.solved ? "标记未掌握" : "标记已掌握"}
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-3">
                     <KnowledgeMarkdown markdown={item.reason} />
@@ -1575,6 +1656,52 @@ function MistakeBookContent({
           subjectLabel={scoreSubjectFilter}
           timeManagementRecords={timeManagementRecords}
         />
+      ) : null}
+
+      {pendingDeleteMistake ? (
+        <div
+          className="fixed inset-0 z-[80] overflow-y-auto bg-background/75 p-4 backdrop-blur-sm"
+          onClick={() => setPendingDeleteMistake(null)}
+        >
+          <div className="mx-auto flex min-h-full w-full max-w-2xl items-center justify-center">
+            <div
+              className="frosted-card my-4 w-full max-w-md overflow-hidden"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-border/80 px-6 py-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300">
+                    <TrashIcon />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm tracking-[0.18em] uppercase text-muted-foreground">删除错题</p>
+                    <h3 className="mt-2 text-xl font-semibold text-foreground">确定要删除这条错题记录吗？</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">删除后无法恢复。</p>
+                    <p className="mt-3 line-clamp-3 text-xs text-muted-foreground">
+                      {pendingDeleteMistake.subject} · {pendingDeleteMistake.source || "（无出处）"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={() => setPendingDeleteMistake(null)}
+                  className="rounded-xl border border-border/80 bg-card px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-accent/45 hover:text-foreground"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteMistake}
+                  className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-500/15 dark:text-red-300"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {pendingDeleteTimeRecord ? (
