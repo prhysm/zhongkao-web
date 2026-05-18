@@ -91,7 +91,7 @@ export function ThemeTuner() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed right-4 bottom-4 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-card/95 text-muted-foreground shadow-[0_14px_30px_rgba(0,0,0,0.25)] transition hover:border-accent/70 hover:text-foreground"
+        className="fixed right-4 bottom-4 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-card/95 text-muted-foreground shadow-[0_14px_30px_rgba(0,0,0,0.25)] transition hover:border-accent/70 hover:text-foreground print:hidden"
         aria-label="打开主题细节微调面板"
         title="主题细节微调"
       >
@@ -105,7 +105,7 @@ export function ThemeTuner() {
   }
 
   return (
-    <aside className="fixed right-4 bottom-4 z-50 w-72 rounded-2xl border border-border bg-card/95 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)]">
+    <aside className="fixed right-4 bottom-4 z-50 w-72 rounded-2xl border border-border bg-card/95 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)] print:hidden">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Theme Tuner</p>

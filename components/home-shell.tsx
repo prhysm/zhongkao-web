@@ -72,9 +72,9 @@ export function HomeShell() {
   }
 
   return (
-    <div className={`min-h-screen pt-14 ${isLearningPanelExpanded ? "" : "flex flex-col xl:flex-row"}`}>
+    <div className={`min-h-screen pt-14 print:pt-0 ${isLearningPanelExpanded ? "" : "flex flex-col xl:flex-row"}`}>
       {!isLearningPanelExpanded ? (
-        <div className="flex items-center justify-center border-b border-border/80 py-12 xl:sticky xl:top-14 xl:h-[calc(100vh-3.5rem)] xl:w-[min(34rem,38vw)] xl:border-b-0 xl:border-r xl:py-0">
+        <div className="flex items-center justify-center border-b border-border/80 py-12 print:hidden xl:sticky xl:top-14 xl:h-[calc(100vh-3.5rem)] xl:w-[min(34rem,38vw)] xl:border-b-0 xl:border-r xl:py-0">
           <Countdown
             onFocusModeChange={handleFocusModeChange}
             onNavigateLearningTab={handleOpenLearningTab}
@@ -86,8 +86,8 @@ export function HomeShell() {
         ref={learningPanelRef}
         className={
           isLearningPanelExpanded
-            ? "mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-[1440px] flex-col p-4 md:p-6 xl:p-8"
-            : "flex min-h-0 flex-1 flex-col p-4 md:p-6 xl:h-[calc(100vh-3.5rem)] xl:p-8"
+            ? "mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-[1440px] flex-col p-4 md:p-6 print:p-0 xl:p-8"
+            : "flex min-h-0 flex-1 flex-col p-4 md:p-6 print:p-0 xl:h-[calc(100vh-3.5rem)] xl:p-8"
         }
       >
         <MistakeBook

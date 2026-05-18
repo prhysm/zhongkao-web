@@ -41,6 +41,8 @@ import {
   TimeManagementRecord,
 } from "@/lib/study-data";
 import { getFocusExamTemplateBySubjectLabel } from "@/lib/focus-exams";
+import { MistakeExportMenu } from "@/components/mistake-export-menu";
+import { MistakePrintSheet } from "@/components/mistake-print-sheet";
 import { type MistakeItem } from "@/lib/mistakes-model";
 import { useStudyRecords } from "@/lib/study-records-context";
 
@@ -868,9 +870,9 @@ function MistakeBookContent({
   };
 
   return (
-    <section className="frosted-card flex min-h-0 flex-1 flex-col p-6 lg:p-8">
+    <section className="frosted-card flex min-h-0 flex-1 flex-col p-6 lg:p-8 print:border-0 print:bg-white print:p-0 print:shadow-none">
       <div
-        className={`flex flex-col gap-4 pb-4 sm:flex-row sm:items-start sm:justify-between ${
+        className={`flex flex-col gap-4 pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden ${
           knowledgeImmersiveDetail ? "border-0 pb-3" : "border-b border-border/80"
         }`}
       >
@@ -926,7 +928,7 @@ function MistakeBookContent({
 
       {!knowledgeImmersiveDetail ? (
         <>
-          <div className="mt-4 -mx-1 overflow-x-auto pb-1">
+          <div className="mt-4 -mx-1 overflow-x-auto pb-1 print:hidden">
             <div className="flex min-w-max gap-2 px-1">
               {[
                 { key: "mistakes", label: "错题本" },
@@ -1035,14 +1037,26 @@ function MistakeBookContent({
         className={
           knowledgeImmersiveDetail
             ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-            : "min-h-0 flex-1 overflow-y-auto pb-20"
+            : "min-h-0 flex-1 overflow-y-auto pb-20 print:overflow-visible print:pb-0"
         }
       >
-      {!allDataMounted ? <p className="mt-6 text-sm text-muted-foreground">正在加载数据...</p> : null}
+      {!allDataMounted ? (
+        <p className="mt-6 text-sm text-muted-foreground print:hidden">正在加载数据...</p>
+      ) : null}
 
       {activeTab === "mistakes" ? (
         <div>
-          <form onSubmit={handleSubmit} className="mt-5 grid gap-4 rounded-2xl border border-border/80 bg-card p-4">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 print:hidden">
+            <p className="text-sm text-muted-foreground">
+              {subject} · 共 {subjectMistakes.length} 题 · 待巩固 {pendingCount} 题
+            </p>
+            <MistakeExportMenu mistakes={safeMistakes} />
+          </div>
+
+          <form
+            onSubmit={handleSubmit}
+            className="mt-5 grid gap-4 rounded-2xl border border-border/80 bg-card p-4 print:hidden"
+          >
             {editingMistakeId ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/35 bg-accent-soft/25 px-3 py-2 text-sm text-foreground">
                 <span>正在修改一条已有错题，保存后列表中的内容会同步更新。</span>
@@ -1099,7 +1113,7 @@ function MistakeBookContent({
             </button>
           </form>
 
-          <div className="mt-5 space-y-3">
+          <div className="mt-5 space-y-3 print:hidden">
             {subjectMistakes.length === 0 ? (
               <p className="text-sm text-muted-foreground">当前学科还没有记录，先添加第一题。</p>
             ) : (
@@ -1165,6 +1179,8 @@ function MistakeBookContent({
               ))
             )}
           </div>
+
+          <MistakePrintSheet mistakes={subjectMistakes} subjectLabel={subject} />
         </div>
       ) : null}
 
