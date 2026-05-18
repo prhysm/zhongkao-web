@@ -1050,7 +1050,7 @@ function MistakeBookContent({
             <p className="text-sm text-muted-foreground">
               {subject} · 共 {subjectMistakes.length} 题 · 待巩固 {pendingCount} 题
             </p>
-            <MistakeExportMenu mistakes={safeMistakes} />
+            <MistakeExportMenu mistakes={subjectMistakes} subjectLabel={subject} />
           </div>
 
           <form

@@ -20,14 +20,17 @@ function escapeCsvField(value: string): string {
   return normalized;
 }
 
-export function getMistakeCsvFilename(date = new Date()): string {
+export function getMistakeCsvFilename(subjectLabel?: string, date = new Date()): string {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
   const day = `${date.getDate()}`.padStart(2, "0");
-  return `我的错题本_${year}${month}${day}.csv`;
+  const subjectPart = subjectLabel?.trim()
+    ? `_${subjectLabel.trim().replace(/[/\\:*?"<>|]/g, "")}`
+    : "";
+  return `我的错题本${subjectPart}_${year}${month}${day}.csv`;
 }
 
-export function exportToCSV(data: MistakeItem[]): void {
+export function exportToCSV(data: MistakeItem[], subjectLabel?: string): void {
   const rows = data.map((item) => [
     displayMistakeField(item.subject),
     displayMistakeField(item.source),
@@ -45,7 +48,7 @@ export function exportToCSV(data: MistakeItem[]): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = getMistakeCsvFilename();
+  link.download = getMistakeCsvFilename(subjectLabel);
   link.style.display = "none";
   document.body.appendChild(link);
   link.click();

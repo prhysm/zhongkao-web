@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MistakeItem } from "@/lib/mistakes-model";
+import type { Subject } from "@/lib/mockData";
 import { exportToCSV } from "@/lib/mistake-export";
 
 type MistakeExportMenuProps = {
   mistakes: MistakeItem[];
+  subjectLabel: Subject;
 };
 
-export function MistakeExportMenu({ mistakes }: MistakeExportMenuProps) {
+export function MistakeExportMenu({ mistakes, subjectLabel }: MistakeExportMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -40,7 +42,7 @@ export function MistakeExportMenu({ mistakes }: MistakeExportMenuProps) {
 
   const handleExport = () => {
     setOpen(false);
-    exportToCSV(mistakes);
+    exportToCSV(mistakes, subjectLabel);
   };
 
   return (
