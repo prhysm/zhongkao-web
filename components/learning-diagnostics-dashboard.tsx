@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ScoreRecord, TimeManagementRecord } from "@/lib/study-data";
+import { resolveTimeManagementExamName, ScoreRecord, TimeManagementRecord } from "@/lib/study-data";
 
 type LearningDiagnosticsDashboardProps = {
   scoreRecords: ScoreRecord[];
@@ -229,7 +229,7 @@ function buildLinkedDiagnosticExams(
       return [
         {
           examId: timeRecord.id,
-          examName: scoreRecord.examName,
+          examName: resolveTimeManagementExamName(timeRecord, scoreRecord),
           endedAt: timeRecord.endedAt,
           overallScoreRate: scoreRecord.score / scoreRecord.fullScore,
           blocks,

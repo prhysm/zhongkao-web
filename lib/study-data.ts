@@ -19,12 +19,30 @@ export type TimeManagementBlockRecord = {
 export type TimeManagementRecord = {
   id: string;
   subjectLabel: string;
+  examName: string;
   totalSeconds: number;
   usedSeconds: number;
   endedAt: string;
   endedBy: FocusSessionEndReason;
   blocks: TimeManagementBlockRecord[];
 };
+
+export function getDefaultTimeManagementExamName(subjectLabel: string): string {
+  return `${subjectLabel} 模拟考`;
+}
+
+export function resolveTimeManagementExamName(
+  record: TimeManagementRecord,
+  scoreRecord?: ScoreRecord | null
+): string {
+  const trimmed = record.examName?.trim();
+  if (trimmed) return trimmed;
+
+  const scoreName = scoreRecord?.examName?.trim();
+  if (scoreName) return scoreName;
+
+  return getDefaultTimeManagementExamName(record.subjectLabel);
+}
 
 export type ScoreBlockRecord = {
   id: string;
@@ -67,6 +85,11 @@ export function parseStoredTimeManagementRecords(raw: string): TimeManagementRec
     const record = item as Record<string, unknown>;
     const subjectLabel = typeof record.subjectLabel === "string" ? record.subjectLabel.trim() : "";
     if (!subjectLabel) return [];
+
+    const examName =
+      typeof record.examName === "string" && record.examName.trim().length > 0
+        ? record.examName.trim()
+        : getDefaultTimeManagementExamName(subjectLabel);
 
     const rawBlocks = Array.isArray(record.blocks) ? record.blocks : [];
     const blocks = rawBlocks.flatMap((block, blockIndex) => {
@@ -116,6 +139,7 @@ export function parseStoredTimeManagementRecords(raw: string): TimeManagementRec
             ? record.id
             : `time-record-${index}`,
         subjectLabel,
+        examName,
         totalSeconds,
         usedSeconds,
         endedAt,

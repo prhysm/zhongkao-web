@@ -10,6 +10,7 @@ import {
 import {
   FocusSessionEndReason,
   LearningTabKey,
+  getDefaultTimeManagementExamName,
   TimeManagementRecord,
 } from "@/lib/study-data";
 import { useStudyRecords } from "@/lib/study-records-context";
@@ -98,6 +99,7 @@ function buildExamReport(
   return {
     id: `time-record-${Date.now()}`,
     subjectLabel: session.subjectLabel,
+    examName: getDefaultTimeManagementExamName(session.subjectLabel),
     blocks: session.blocks.map((block, index) => ({
       ...block,
       actualSeconds: sanitizedSeconds[index] ?? 0,

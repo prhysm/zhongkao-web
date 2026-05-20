@@ -37,6 +37,7 @@ import { getKnowledgeFrequencyMeta } from "@/lib/knowledge-frequency";
 import {
   FOCUS_EXAM_SUBJECTS,
   LearningTabKey,
+  resolveTimeManagementExamName,
   ScoreRecord,
   TimeManagementRecord,
 } from "@/lib/study-data";
@@ -385,6 +386,11 @@ function MistakeBookContent({
   const [scoreEditor, setScoreEditor] = useState<ScoreEditorState | null>(null);
   const [scoreEditorError, setScoreEditorError] = useState<string | null>(null);
   const [pendingDeleteTimeRecord, setPendingDeleteTimeRecord] = useState<TimeManagementRecord | null>(null);
+  const [timeExamNameEditor, setTimeExamNameEditor] = useState<{
+    record: TimeManagementRecord;
+    examName: string;
+  } | null>(null);
+  const [timeExamNameError, setTimeExamNameError] = useState<string | null>(null);
   const [editingMistakeId, setEditingMistakeId] = useState<string | null>(null);
   const [pendingDeleteMistake, setPendingDeleteMistake] = useState<MistakeItem | null>(null);
 
@@ -727,7 +733,9 @@ function MistakeBookContent({
       subjectLabel,
       examName:
         existingRecord?.examName ??
-        (timeManagementRecord ? `${subjectLabel} 模拟考` : `${subjectLabel} 成绩记录`),
+        (timeManagementRecord
+          ? resolveTimeManagementExamName(timeManagementRecord)
+          : `${subjectLabel} 成绩记录`),
       recordedAt: toDateInputValue(existingRecord?.recordedAt ?? timeManagementRecord?.endedAt),
       blocks: baseBlocks,
     });
@@ -794,7 +802,50 @@ function MistakeBookContent({
       );
       return [nextRecord, ...filtered];
     });
+    if (nextRecord.timeManagementRecordId) {
+      setTimeManagementRecords((prev) =>
+        prev.map((record) =>
+          record.id === nextRecord.timeManagementRecordId
+            ? { ...record, examName: nextRecord.examName }
+            : record
+        )
+      );
+    }
     closeScoreEditor();
+  };
+
+  const openTimeExamNameEditor = (record: TimeManagementRecord) => {
+    const linkedScoreRecord = scoreRecordByTimeManagementId.get(record.id);
+    setTimeExamNameError(null);
+    setTimeExamNameEditor({
+      record,
+      examName: resolveTimeManagementExamName(record, linkedScoreRecord),
+    });
+  };
+
+  const handleSaveTimeExamName = () => {
+    if (!timeExamNameEditor) return;
+
+    const trimmed = timeExamNameEditor.examName.trim();
+    if (!trimmed) {
+      setTimeExamNameError("请先填写考试名称。");
+      return;
+    }
+
+    const recordId = timeExamNameEditor.record.id;
+    setTimeManagementRecords((prev) =>
+      prev.map((record) => (record.id === recordId ? { ...record, examName: trimmed } : record))
+    );
+    setScoreRecords((prev) =>
+      prev.map((record) =>
+        record.timeManagementRecordId === recordId ? { ...record, examName: trimmed } : record
+      )
+    );
+    if (scoreEditor?.timeManagementRecordId === recordId) {
+      setScoreEditor((current) => (current ? { ...current, examName: trimmed } : current));
+    }
+    setTimeExamNameEditor(null);
+    setTimeExamNameError(null);
   };
 
   const handleDeleteScoreRecord = (recordId: string) => {
@@ -1325,7 +1376,7 @@ function MistakeBookContent({
                       <button
                         type="button"
                         onClick={() => handleRequestDeleteTimeManagementRecord(record)}
-                        aria-label={`删除 ${record.subjectLabel} ${formatRecordDate(record.endedAt)} 的考试记录`}
+                        aria-label={`删除 ${resolveTimeManagementExamName(record, scoreRecord)} 的考试记录`}
                         title="删除记录"
                         className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-background/35 text-muted-foreground/70 opacity-55 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-700 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/35 dark:hover:text-red-300"
                       >
@@ -1333,7 +1384,10 @@ function MistakeBookContent({
                       </button>
                       <div className="flex flex-col gap-3 pr-10 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                          <p className="text-sm font-semibold text-foreground">{formatRecordDate(record.endedAt)}</p>
+                          <p className="text-base font-semibold text-foreground">
+                            {resolveTimeManagementExamName(record, scoreRecord)}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">{formatRecordDate(record.endedAt)}</p>
                           <p className="mt-1 text-sm text-muted-foreground">
                             理想 {formatMinutesFromSeconds(record.totalSeconds)} 分钟 · 实际{" "}
                             {formatMinutesFromSeconds(record.usedSeconds)} 分钟
@@ -1349,6 +1403,13 @@ function MistakeBookContent({
                           >
                             {isOvertime ? "总时长超时" : "总时长达标"}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => openTimeExamNameEditor(record)}
+                            className="rounded-full border border-border/80 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-accent/45 hover:bg-accent-soft/30"
+                          >
+                            编辑名称
+                          </button>
                           <button
                             type="button"
                             onClick={() =>
@@ -1742,7 +1803,11 @@ function MistakeBookContent({
                       删除后相关统计数据将同步更新且不可恢复。
                     </p>
                     <p className="mt-3 text-xs text-muted-foreground">
-                      {pendingDeleteTimeRecord.subjectLabel} · {formatRecordDate(pendingDeleteTimeRecord.endedAt)}
+                      {resolveTimeManagementExamName(
+                        pendingDeleteTimeRecord,
+                        scoreRecordByTimeManagementId.get(pendingDeleteTimeRecord.id)
+                      )}{" "}
+                      · {formatRecordDate(pendingDeleteTimeRecord.endedAt)}
                     </p>
                   </div>
                 </div>
@@ -1761,6 +1826,73 @@ function MistakeBookContent({
                   className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-500/15 dark:text-red-300"
                 >
                   确认删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {timeExamNameEditor ? (
+        <div
+          className="fixed inset-0 z-[75] overflow-y-auto bg-background/75 p-4 backdrop-blur-sm"
+          onClick={() => {
+            setTimeExamNameEditor(null);
+            setTimeExamNameError(null);
+          }}
+        >
+          <div className="mx-auto flex min-h-full w-full max-w-2xl items-center justify-center">
+            <div
+              className="frosted-card my-4 w-full max-w-md overflow-hidden"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-border/80 px-6 py-6">
+                <p className="text-sm tracking-[0.18em] uppercase text-muted-foreground">时间管理</p>
+                <h3 className="mt-2 text-xl font-semibold text-foreground">编辑考试名称</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {timeExamNameEditor.record.subjectLabel} · {formatRecordDate(timeExamNameEditor.record.endedAt)}
+                </p>
+              </div>
+              <div className="space-y-4 px-6 py-5">
+                <div>
+                  <label className="text-[11px] tracking-[0.14em] uppercase text-muted-foreground">考试名称</label>
+                  <input
+                    value={timeExamNameEditor.examName}
+                    onChange={(event) => {
+                      setTimeExamNameEditor((current) =>
+                        current ? { ...current, examName: event.target.value } : current
+                      );
+                      if (timeExamNameError) {
+                        setTimeExamNameError(null);
+                      }
+                    }}
+                    placeholder={`例如：${timeExamNameEditor.record.subjectLabel} 二模`}
+                    className="mt-1.5 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-accent/70"
+                  />
+                </div>
+                {timeExamNameError ? (
+                  <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                    {timeExamNameError}
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-border/80 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimeExamNameEditor(null);
+                    setTimeExamNameError(null);
+                  }}
+                  className="rounded-xl border border-border/80 bg-card px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-accent/45 hover:text-foreground"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveTimeExamName}
+                  className="rounded-xl border border-accent/60 bg-accent-soft/45 px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent-soft/60"
+                >
+                  保存名称
                 </button>
               </div>
             </div>
