@@ -43,6 +43,8 @@ import {
 } from "@/lib/study-data";
 import { getFocusExamTemplateBySubjectLabel } from "@/lib/focus-exams";
 import { MistakeExportMenu } from "@/components/mistake-export-menu";
+import { MistakeFormAnalyzing } from "@/components/mistake-form-analyzing";
+import { MistakeQuestionUpload } from "@/components/mistake-question-upload";
 import { MistakePrintSheet } from "@/components/mistake-print-sheet";
 import { type MistakeItem } from "@/lib/mistakes-model";
 import { useStudyRecords } from "@/lib/study-records-context";
@@ -393,6 +395,8 @@ function MistakeBookContent({
   const [timeExamNameError, setTimeExamNameError] = useState<string | null>(null);
   const [editingMistakeId, setEditingMistakeId] = useState<string | null>(null);
   const [pendingDeleteMistake, setPendingDeleteMistake] = useState<MistakeItem | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [uploadedQuestionPreviewUrl, setUploadedQuestionPreviewUrl] = useState<string | null>(null);
 
   const knowledgeRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const activeTab = externalActiveTab ?? internalActiveTab;
@@ -624,6 +628,30 @@ function MistakeBookContent({
     return () => window.clearTimeout(timeoutId);
   }, [searchQuery]);
 
+  useEffect(() => {
+    return () => {
+      if (uploadedQuestionPreviewUrl) {
+        URL.revokeObjectURL(uploadedQuestionPreviewUrl);
+      }
+    };
+  }, [uploadedQuestionPreviewUrl]);
+
+  const clearUploadedQuestionPreview = () => {
+    setUploadedQuestionPreviewUrl((previousUrl) => {
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      return null;
+    });
+    setIsAnalyzing(false);
+  };
+
+  const handleQuestionImageSelect = (file: File) => {
+    setUploadedQuestionPreviewUrl((previousUrl) => {
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      return URL.createObjectURL(file);
+    });
+    setIsAnalyzing(true);
+  };
+
   const resetMistakeForm = () => {
     setEditingMistakeId(null);
     setSource("");
@@ -631,6 +659,7 @@ function MistakeBookContent({
     setKnowledgeQuery("");
     setReason("");
     setSkill("");
+    clearUploadedQuestionPreview();
   };
 
   const handleBeginEditMistake = (item: MistakeItem) => {
@@ -1101,67 +1130,81 @@ function MistakeBookContent({
             <p className="text-sm text-muted-foreground">
               {subject} · 共 {subjectMistakes.length} 题 · 待巩固 {pendingCount} 题
             </p>
-            <MistakeExportMenu mistakes={subjectMistakes} subjectLabel={subject} />
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <MistakeQuestionUpload
+                previewUrl={uploadedQuestionPreviewUrl}
+                onImageSelect={handleQuestionImageSelect}
+                onClearPreview={clearUploadedQuestionPreview}
+                disabled={isAnalyzing}
+              />
+              <MistakeExportMenu mistakes={subjectMistakes} subjectLabel={subject} />
+            </div>
           </div>
 
           <form
             onSubmit={handleSubmit}
             className="mt-5 grid gap-4 rounded-2xl border border-border/80 bg-card p-4 print:hidden"
           >
-            {editingMistakeId ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/35 bg-accent-soft/25 px-3 py-2 text-sm text-foreground">
-                <span>正在修改一条已有错题，保存后列表中的内容会同步更新。</span>
-                <button
-                  type="button"
-                  onClick={resetMistakeForm}
-                  className="shrink-0 rounded-lg border border-border/80 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-accent/45 hover:text-foreground"
-                >
-                  取消修改
+            {isAnalyzing ? (
+              <MistakeFormAnalyzing />
+            ) : (
+              <>
+                {editingMistakeId ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/35 bg-accent-soft/25 px-3 py-2 text-sm text-foreground">
+                    <span>正在修改一条已有错题，保存后列表中的内容会同步更新。</span>
+                    <button
+                      type="button"
+                      onClick={resetMistakeForm}
+                      className="shrink-0 rounded-lg border border-border/80 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-accent/45 hover:text-foreground"
+                    >
+                      取消修改
+                    </button>
+                  </div>
+                ) : null}
+                <div>
+                  <label className="text-sm text-muted-foreground">题目出处</label>
+                  <input
+                    value={source}
+                    onChange={(event) => setSource(event.target.value)}
+                    placeholder="例如：徐汇区二模数学第18题"
+                    className="mt-2 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-accent/70"
+                  />
+                </div>
+                <CreatableMultiSelect
+                  label="知识点"
+                  value={knowledge}
+                  inputValue={knowledgeQuery}
+                  onInputChange={setKnowledgeQuery}
+                  onChange={setKnowledge}
+                  options={knowledgeOptions}
+                  placeholder={subject === "历史" ? "可输入册别或单元，例如：七上 / 第三单元" : "可搜索或自定义输入"}
+                  continuePlaceholder="继续搜索下一个知识点"
+                  emptyStateText="未找到匹配知识点，按回车可添加自定义项。"
+                  removeItemAriaLabel={(item) => `删除知识点 ${item}`}
+                />
+                <div>
+                  <label className="text-sm text-muted-foreground">错误原因</label>
+                  <textarea
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    className="mt-2 min-h-24 w-full rounded-xl border border-border bg-background p-3 text-sm outline-none transition focus:border-accent/70"
+                    placeholder="例如：忽略了定义域限制，导致范围判断错误"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground">解题技巧</label>
+                  <input
+                    value={skill}
+                    onChange={(event) => setSkill(event.target.value)}
+                    placeholder="可直接输入本题的解题提醒"
+                    className="mt-2 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-accent/70"
+                  />
+                </div>
+                <button type="submit" className="h-10 rounded-xl bg-foreground text-background text-sm font-medium">
+                  {editingMistakeId ? "保存修改" : "保存错题"}
                 </button>
-              </div>
-            ) : null}
-            <div>
-              <label className="text-sm text-muted-foreground">题目出处</label>
-              <input
-                value={source}
-                onChange={(event) => setSource(event.target.value)}
-                placeholder="例如：徐汇区二模数学第18题"
-                className="mt-2 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-accent/70"
-              />
-            </div>
-            <CreatableMultiSelect
-              label="知识点"
-              value={knowledge}
-              inputValue={knowledgeQuery}
-              onInputChange={setKnowledgeQuery}
-              onChange={setKnowledge}
-              options={knowledgeOptions}
-              placeholder={subject === "历史" ? "可输入册别或单元，例如：七上 / 第三单元" : "可搜索或自定义输入"}
-              continuePlaceholder="继续搜索下一个知识点"
-              emptyStateText="未找到匹配知识点，按回车可添加自定义项。"
-              removeItemAriaLabel={(item) => `删除知识点 ${item}`}
-            />
-            <div>
-              <label className="text-sm text-muted-foreground">错误原因</label>
-              <textarea
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                className="mt-2 min-h-24 w-full rounded-xl border border-border bg-background p-3 text-sm outline-none transition focus:border-accent/70"
-                placeholder="例如：忽略了定义域限制，导致范围判断错误"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-muted-foreground">解题技巧</label>
-              <input
-                value={skill}
-                onChange={(event) => setSkill(event.target.value)}
-                placeholder="可直接输入本题的解题提醒"
-                className="mt-2 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-accent/70"
-              />
-            </div>
-            <button type="submit" className="h-10 rounded-xl bg-foreground text-background text-sm font-medium">
-              {editingMistakeId ? "保存修改" : "保存错题"}
-            </button>
+              </>
+            )}
           </form>
 
           <div className="mt-5 space-y-3 print:hidden">
