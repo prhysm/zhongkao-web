@@ -8,11 +8,21 @@ import { exportToCSV } from "@/lib/mistake-export";
 type MistakeExportMenuProps = {
   mistakes: MistakeItem[];
   subjectLabel: Subject;
+  practicePrintCount: number;
+  onPrintReview: () => void;
+  onPrintPractice: () => void;
 };
 
-export function MistakeExportMenu({ mistakes, subjectLabel }: MistakeExportMenuProps) {
+export function MistakeExportMenu({
+  mistakes,
+  subjectLabel,
+  practicePrintCount,
+  onPrintReview,
+  onPrintPractice,
+}: MistakeExportMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const practiceDisabled = practicePrintCount === 0;
 
   useEffect(() => {
     if (!open) return;
@@ -35,9 +45,15 @@ export function MistakeExportMenu({ mistakes, subjectLabel }: MistakeExportMenuP
     };
   }, [open]);
 
-  const handlePrint = () => {
+  const handlePrintReview = () => {
     setOpen(false);
-    window.print();
+    onPrintReview();
+  };
+
+  const handlePrintPractice = () => {
+    if (practiceDisabled) return;
+    setOpen(false);
+    onPrintPractice();
   };
 
   const handleExport = () => {
@@ -63,12 +79,25 @@ export function MistakeExportMenu({ mistakes, subjectLabel }: MistakeExportMenuP
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-30 mt-2 min-w-[15rem] overflow-hidden rounded-xl border border-border/90 bg-card py-1 shadow-lg"
+          className="absolute right-0 z-30 mt-2 min-w-[17rem] overflow-hidden rounded-xl border border-border/90 bg-card py-1 shadow-lg"
         >
           <button
             type="button"
             role="menuitem"
-            onClick={handlePrint}
+            onClick={handlePrintPractice}
+            disabled={practiceDisabled}
+            className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-foreground transition hover:bg-accent-soft/35 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span aria-hidden>📝</span>
+            导出为打印版（二次练习）
+            {practiceDisabled ? null : (
+              <span className="ml-auto text-xs text-muted-foreground">{practicePrintCount} 题</span>
+            )}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={handlePrintReview}
             className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-foreground transition hover:bg-accent-soft/35"
           >
             <span aria-hidden>🖨️</span>
