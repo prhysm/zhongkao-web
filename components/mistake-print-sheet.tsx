@@ -6,6 +6,7 @@ import type { Subject } from "@/lib/mockData";
 type MistakePrintSheetProps = {
   mistakes: MistakeItem[];
   subjectLabel: Subject;
+  className?: string;
 };
 
 function formatPrintDate(date = new Date()): string {
@@ -16,10 +17,14 @@ function formatPrintDate(date = new Date()): string {
   }).format(date);
 }
 
-export function MistakePrintSheet({ mistakes, subjectLabel }: MistakePrintSheetProps) {
+export function MistakePrintSheet({
+  mistakes,
+  subjectLabel,
+  className = "mistake-review-print-sheet hidden print:block",
+}: MistakePrintSheetProps) {
   if (mistakes.length === 0) {
     return (
-      <div className="hidden print:block">
+      <div className={className}>
         <p className="text-sm text-neutral-700">
           {subjectLabel} 暂无错题记录，添加后再打印复盘清单。
         </p>
@@ -28,7 +33,7 @@ export function MistakePrintSheet({ mistakes, subjectLabel }: MistakePrintSheetP
   }
 
   return (
-    <div className="hidden print:block print:text-black">
+    <div className={`${className} print:text-black`}>
       <header className="mb-6 border-b border-neutral-300 pb-4">
         <p className="text-xs tracking-[0.2em] text-neutral-500 uppercase">考前复盘</p>
         <h1 className="mt-1 text-2xl font-semibold text-black">{subjectLabel} · 错题本复盘清单</h1>

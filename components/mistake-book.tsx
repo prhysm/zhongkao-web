@@ -44,8 +44,18 @@ import {
 import { getFocusExamTemplateBySubjectLabel } from "@/lib/focus-exams";
 import { MistakeExportMenu } from "@/components/mistake-export-menu";
 import { MistakeFormAnalyzing } from "@/components/mistake-form-analyzing";
+import { MistakePracticePrintSheet } from "@/components/mistake-practice-print-sheet";
 import { MistakeQuestionUpload } from "@/components/mistake-question-upload";
 import { MistakePrintSheet } from "@/components/mistake-print-sheet";
+import {
+  getPracticePrintSheetClassName,
+  getReviewPrintSheetClassName,
+  pickMistakesForPracticePrint,
+  type MistakePrintMode,
+} from "@/lib/mistake-practice-print";
+import { requestAnalyzeError } from "@/lib/analyze-error-client";
+import { useAuth } from "@/lib/auth-context";
+import { uploadMistakeQuestionImage } from "@/lib/mistake-question-image";
 import { type MistakeItem } from "@/lib/mistakes-model";
 import { useStudyRecords } from "@/lib/study-records-context";
 
@@ -377,6 +387,8 @@ function MistakeBookContent({
   const [selectedKnowledgeDirectoryKey, setSelectedKnowledgeDirectoryKey] = useState<string | null>(null);
 
   const [source, setSource] = useState("");
+  const [questionText, setQuestionText] = useState("");
+  const [draftQuestionImageUrl, setDraftQuestionImageUrl] = useState<string | null>(null);
   const [knowledge, setKnowledge] = useState<string[]>([]);
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -397,8 +409,13 @@ function MistakeBookContent({
   const [pendingDeleteMistake, setPendingDeleteMistake] = useState<MistakeItem | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadedQuestionPreviewUrl, setUploadedQuestionPreviewUrl] = useState<string | null>(null);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [selectedMistakeIds, setSelectedMistakeIds] = useState<Set<string>>(() => new Set());
+  const [printMode, setPrintMode] = useState<MistakePrintMode>(null);
 
+  const { user } = useAuth();
   const knowledgeRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const analyzeAbortRef = useRef<AbortController | null>(null);
   const activeTab = externalActiveTab ?? internalActiveTab;
   const safeMistakes = useMemo(() => normalizeMistakeEntries(mistakes), [mistakes]);
 
@@ -455,7 +472,14 @@ function MistakeBookContent({
     () => safeMistakes.filter((item) => item.subject === subject),
     [safeMistakes, subject]
   );
+  const practicePrintMistakes = useMemo(
+    () => pickMistakesForPracticePrint(subjectMistakes, selectedMistakeIds),
+    [selectedMistakeIds, subjectMistakes]
+  );
   const pendingCount = useMemo(() => subjectMistakes.filter((item) => !item.solved).length, [subjectMistakes]);
+  const selectedMistakeCount = practicePrintMistakes.length;
+  const allSubjectMistakesSelected =
+    subjectMistakes.length > 0 && subjectMistakes.every((item) => selectedMistakeIds.has(item.id));
   const timeManagementSubjects = useMemo(
     () => ["全部", ...new Set([...FOCUS_EXAM_SUBJECTS, ...timeManagementRecords.map((item) => item.subjectLabel)])],
     [timeManagementRecords]
@@ -629,32 +653,112 @@ function MistakeBookContent({
   }, [searchQuery]);
 
   useEffect(() => {
+    setSelectedMistakeIds(new Set(subjectMistakes.map((item) => item.id)));
+  }, [subject]);
+
+  useEffect(() => {
+    const resetPrintMode = () => setPrintMode(null);
+    window.addEventListener("afterprint", resetPrintMode);
+    return () => window.removeEventListener("afterprint", resetPrintMode);
+  }, []);
+
+  const triggerBrowserPrint = (mode: Exclude<MistakePrintMode, null>) => {
+    setPrintMode(mode);
+    window.requestAnimationFrame(() => window.print());
+  };
+
+  const toggleMistakeSelection = (mistakeId: string) => {
+    setSelectedMistakeIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(mistakeId)) {
+        next.delete(mistakeId);
+      } else {
+        next.add(mistakeId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllSubjectMistakes = () => {
+    setSelectedMistakeIds(new Set(subjectMistakes.map((item) => item.id)));
+  };
+
+  const clearMistakeSelection = () => {
+    setSelectedMistakeIds(new Set());
+  };
+
+  useEffect(() => {
     return () => {
-      if (uploadedQuestionPreviewUrl) {
+      if (uploadedQuestionPreviewUrl?.startsWith("blob:")) {
         URL.revokeObjectURL(uploadedQuestionPreviewUrl);
       }
     };
   }, [uploadedQuestionPreviewUrl]);
 
   const clearUploadedQuestionPreview = () => {
+    analyzeAbortRef.current?.abort();
+    analyzeAbortRef.current = null;
     setUploadedQuestionPreviewUrl((previousUrl) => {
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      if (previousUrl?.startsWith("blob:")) URL.revokeObjectURL(previousUrl);
       return null;
     });
+    setDraftQuestionImageUrl(null);
     setIsAnalyzing(false);
+    setAnalyzeError(null);
   };
 
-  const handleQuestionImageSelect = (file: File) => {
+  const handleImageUpload = async (file: File) => {
+    analyzeAbortRef.current?.abort();
+    const abortController = new AbortController();
+    analyzeAbortRef.current = abortController;
+
+    setAnalyzeError(null);
     setUploadedQuestionPreviewUrl((previousUrl) => {
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      if (previousUrl?.startsWith("blob:")) URL.revokeObjectURL(previousUrl);
       return URL.createObjectURL(file);
     });
     setIsAnalyzing(true);
+
+    try {
+      const imageUrl = await uploadMistakeQuestionImage(file, { userId: user?.id });
+      if (abortController.signal.aborted) return;
+      setDraftQuestionImageUrl(imageUrl);
+
+      const availableKnowledgePoints = [...knowledgeOptions];
+      if (availableKnowledgePoints.length === 0) {
+        throw new Error("当前学科暂无知识点选项，无法进行分析");
+      }
+
+      const result = await requestAnalyzeError(
+        { imageUrl, availableKnowledgePoints },
+        { signal: abortController.signal }
+      );
+      if (abortController.signal.aborted) return;
+
+      setQuestionText(result.extracted_text);
+      setKnowledge(result.knowledge_points);
+      setKnowledgeQuery("");
+      setReason(result.error_reason);
+      setSkill(result.solution_technique);
+    } catch (error) {
+      if (abortController.signal.aborted) return;
+      const message = error instanceof Error ? error.message : "题目分析失败，请稍后重试";
+      setAnalyzeError(message);
+    } finally {
+      if (analyzeAbortRef.current === abortController) {
+        analyzeAbortRef.current = null;
+      }
+      if (!abortController.signal.aborted) {
+        setIsAnalyzing(false);
+      }
+    }
   };
 
   const resetMistakeForm = () => {
     setEditingMistakeId(null);
     setSource("");
+    setQuestionText("");
+    setDraftQuestionImageUrl(null);
     setKnowledge([]);
     setKnowledgeQuery("");
     setReason("");
@@ -666,6 +770,15 @@ function MistakeBookContent({
     setSubject(item.subject);
     setEditingMistakeId(item.id);
     setSource(item.source);
+    setQuestionText(item.questionText ?? "");
+    setDraftQuestionImageUrl(item.questionImageUrl ?? null);
+    setUploadedQuestionPreviewUrl((previousUrl) => {
+      if (previousUrl?.startsWith("blob:")) URL.revokeObjectURL(previousUrl);
+      const persisted = item.questionImageUrl?.trim();
+      return persisted && (persisted.startsWith("http") || persisted.startsWith("data:image/"))
+        ? persisted
+        : null;
+    });
     setKnowledge(Array.isArray(item.knowledge) ? [...item.knowledge] : []);
     setKnowledgeQuery("");
     setReason(item.reason);
@@ -684,6 +797,8 @@ function MistakeBookContent({
     const resolvedKnowledge = nextKnowledge.map((entry) =>
       resolveKnowledgeSelection(subject, structuredKnowledge, entry)
     );
+    const trimmedQuestionText = questionText.trim();
+    const trimmedQuestionImageUrl = draftQuestionImageUrl?.trim() || undefined;
 
     setMistakes((prev) => {
       const previousMistakes = Array.isArray(prev) ? prev : [];
@@ -696,6 +811,8 @@ function MistakeBookContent({
                 ...existing,
                 subject,
                 source: source.trim(),
+                questionText: trimmedQuestionText || undefined,
+                questionImageUrl: trimmedQuestionImageUrl,
                 knowledge: resolvedKnowledge.map((k) => k.label),
                 knowledgeIds: resolvedKnowledge.map((k) => k.id),
                 reason: reason.trim(),
@@ -704,11 +821,14 @@ function MistakeBookContent({
             : x
         );
       }
+      const newId = `mistake-${Date.now()}`;
       return [
         {
-          id: `mistake-${Date.now()}`,
+          id: newId,
           subject,
           source: source.trim(),
+          questionText: trimmedQuestionText || undefined,
+          questionImageUrl: trimmedQuestionImageUrl,
           knowledge: resolvedKnowledge.map((k) => k.label),
           knowledgeIds: resolvedKnowledge.map((k) => k.id),
           reason: reason.trim(),
@@ -1133,13 +1253,28 @@ function MistakeBookContent({
             <div className="flex flex-wrap items-center justify-end gap-3">
               <MistakeQuestionUpload
                 previewUrl={uploadedQuestionPreviewUrl}
-                onImageSelect={handleQuestionImageSelect}
+                onImageSelect={handleImageUpload}
                 onClearPreview={clearUploadedQuestionPreview}
                 disabled={isAnalyzing}
               />
-              <MistakeExportMenu mistakes={subjectMistakes} subjectLabel={subject} />
+              <MistakeExportMenu
+                mistakes={subjectMistakes}
+                subjectLabel={subject}
+                practicePrintCount={selectedMistakeCount}
+                onPrintReview={() => triggerBrowserPrint("review")}
+                onPrintPractice={() => triggerBrowserPrint("practice")}
+              />
             </div>
           </div>
+
+          {analyzeError ? (
+            <p
+              role="alert"
+              className="mt-3 rounded-xl border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-300 print:hidden"
+            >
+              {analyzeError}
+            </p>
+          ) : null}
 
           <form
             onSubmit={handleSubmit}
@@ -1168,6 +1303,15 @@ function MistakeBookContent({
                     onChange={(event) => setSource(event.target.value)}
                     placeholder="例如：徐汇区二模数学第18题"
                     className="mt-2 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-accent/70"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground">题目原文</label>
+                  <textarea
+                    value={questionText}
+                    onChange={(event) => setQuestionText(event.target.value)}
+                    placeholder="拍照识别后会自动填入；也可手动粘贴题面文字"
+                    className="mt-2 min-h-20 w-full rounded-xl border border-border bg-background p-3 text-sm outline-none transition focus:border-accent/70"
                   />
                 </div>
                 <CreatableMultiSelect
@@ -1211,15 +1355,53 @@ function MistakeBookContent({
             {subjectMistakes.length === 0 ? (
               <p className="text-sm text-muted-foreground">当前学科还没有记录，先添加第一题。</p>
             ) : (
-              subjectMistakes.map((item) => (
-                <article key={item.id} className="rounded-2xl border border-border/90 bg-card p-4">
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-card/60 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">
+                    已勾选 {selectedMistakeCount} / {subjectMistakes.length} 题（用于二次练习打印）
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllSubjectMistakes}
+                      disabled={allSubjectMistakesSelected}
+                      className="rounded-lg border border-border/80 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-accent/45 hover:text-foreground disabled:opacity-50"
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearMistakeSelection}
+                      disabled={selectedMistakeCount === 0}
+                      className="rounded-lg border border-border/80 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-accent/45 hover:text-foreground disabled:opacity-50"
+                    >
+                      取消全选
+                    </button>
+                  </div>
+                </div>
+                {subjectMistakes.map((item) => {
+                  const isSelected = selectedMistakeIds.has(item.id);
+                  return (
+                <article
+                  key={item.id}
+                  className={`rounded-2xl border bg-card p-4 transition ${
+                    isSelected ? "border-accent/45" : "border-border/90 opacity-80"
+                  }`}
+                >
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleMistakeSelection(item.id)}
+                        className="h-4 w-4 shrink-0 rounded border-border accent-accent"
+                        aria-label={`选中错题：${item.source || item.questionText || item.id}`}
+                      />
                       <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">
                         {item.subject}
                       </span>
                       <span className="truncate text-xs text-muted-foreground">{item.source}</span>
-                    </div>
+                    </label>
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
                       <button
                         type="button"
@@ -1270,11 +1452,22 @@ function MistakeBookContent({
                     </span>
                   </div>
                 </article>
-              ))
+                  );
+                })}
+              </>
             )}
           </div>
 
-          <MistakePrintSheet mistakes={subjectMistakes} subjectLabel={subject} />
+          <MistakePrintSheet
+            mistakes={subjectMistakes}
+            subjectLabel={subject}
+            className={getReviewPrintSheetClassName(printMode === "review")}
+          />
+          <MistakePracticePrintSheet
+            mistakes={practicePrintMistakes}
+            subjectLabel={subject}
+            className={getPracticePrintSheetClassName(printMode === "practice")}
+          />
         </div>
       ) : null}
 

@@ -5,6 +5,10 @@ export type MistakeItem = {
   id: string;
   subject: Subject;
   source: string;
+  /** AI 识别或手填的题目原文，用于二次练习打印 */
+  questionText?: string;
+  /** 题目图片 URL（Supabase 公开链接或 data URL） */
+  questionImageUrl?: string;
   knowledge: string[];
   knowledgeIds: (string | null)[];
   reason: string;
@@ -58,6 +62,14 @@ export function parseStoredMistakes(raw: string): MistakeItem[] {
             : `mistake-${Date.now()}-${index}`,
         subject: subject as Subject,
         source: typeof record.source === "string" ? record.source : "",
+        questionText:
+          typeof record.questionText === "string" && record.questionText.trim().length > 0
+            ? record.questionText.trim()
+            : undefined,
+        questionImageUrl:
+          typeof record.questionImageUrl === "string" && record.questionImageUrl.trim().length > 0
+            ? record.questionImageUrl.trim()
+            : undefined,
         knowledge,
         knowledgeIds,
         reason: typeof record.reason === "string" ? record.reason : "",
