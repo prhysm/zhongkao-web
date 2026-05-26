@@ -19,6 +19,7 @@ import {
 import { StructuredKnowledgePanel } from "@/components/structured-knowledge-panel";
 import { EnglishKnowledgePanel } from "@/components/english-knowledge-panel";
 import { ChineseKnowledgePanel } from "@/components/chinese-knowledge-panel";
+import { DaofaAssistant } from "@/components/DaofaAssistant";
 import { LearningDiagnosticsDashboard } from "@/components/learning-diagnostics-dashboard";
 import {
   ENGLISH_KNOWLEDGE_TREE,
@@ -594,6 +595,7 @@ function MistakeBookContent({
     activeTab === "knowledge" &&
     structuredKnowledge !== null &&
     selectedKnowledgeDirectoryKey !== null;
+  const showDaofaAssistant = activeTab === "knowledge" && subject === "道法";
 
   const showKnowledgeSearch =
     activeTab === "knowledge" &&
@@ -1474,85 +1476,92 @@ function MistakeBookContent({
       {activeTab === "knowledge" ? (
         <div
           className={
-            knowledgeImmersiveDetail ? "flex min-h-0 flex-1 flex-col pt-2" : "space-y-3"
+            knowledgeImmersiveDetail
+              ? "flex min-h-0 flex-1 flex-col pt-2"
+              : showDaofaAssistant
+                ? "flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:items-start"
+                : "space-y-3"
           }
         >
-          {subject === "语文" ? (
-            <ChineseKnowledgePanel
-              activeModuleId={activeChineseKnowledgeModuleId}
-              onActiveModuleIdChange={setActiveChineseKnowledgeModuleId}
-              selectedCategoryId={selectedChineseKnowledgeCategoryId}
-              onSelectedCategoryIdChange={setSelectedChineseKnowledgeCategoryId}
-              highlightId={highlightId}
-              knowledgeRefs={knowledgeRefs}
-              knowledgeFrequencies={knowledgeMistakeCounts}
-              searchQuery={showKnowledgeSearch ? debouncedSearchQuery : ""}
-            />
-          ) : subject === "英语" ? (
-            <EnglishKnowledgePanel
-              tree={ENGLISH_KNOWLEDGE_TREE}
-              expandedNodeIds={expandedEnglishKnowledgeNodes}
-              setExpandedNodeIds={setExpandedEnglishKnowledgeNodes}
-              highlightId={highlightId}
-              knowledgeRefs={knowledgeRefs}
-              knowledgeFrequencies={knowledgeMistakeCounts}
-              searchQuery={showKnowledgeSearch ? debouncedSearchQuery : ""}
-            />
-          ) : structuredKnowledge ? (
-            <StructuredKnowledgePanel
-              subject={subject}
-              items={structuredKnowledge}
-              selectedDirectoryKey={selectedKnowledgeDirectoryKey}
-              onSelectDirectoryKey={setSelectedKnowledgeDirectoryKey}
-              highlightId={highlightId}
-              knowledgeRefs={knowledgeRefs}
-              knowledgeFrequencies={knowledgeMistakeCounts}
-              searchQuery={showKnowledgeSearch ? debouncedSearchQuery : ""}
-            />
-          ) : (
-            <div className="mt-5 space-y-3">
-              {filteredCurrentKnowledge.length > 0 ? (
-                filteredCurrentKnowledge.map((item: KnowledgePoint) => {
-                  const frequencyMeta = getKnowledgeFrequencyMeta(knowledgeMistakeCounts[item.id] ?? 0);
+          <div className={showDaofaAssistant ? "min-w-0 flex-1" : undefined}>
+            {subject === "语文" ? (
+              <ChineseKnowledgePanel
+                activeModuleId={activeChineseKnowledgeModuleId}
+                onActiveModuleIdChange={setActiveChineseKnowledgeModuleId}
+                selectedCategoryId={selectedChineseKnowledgeCategoryId}
+                onSelectedCategoryIdChange={setSelectedChineseKnowledgeCategoryId}
+                highlightId={highlightId}
+                knowledgeRefs={knowledgeRefs}
+                knowledgeFrequencies={knowledgeMistakeCounts}
+                searchQuery={showKnowledgeSearch ? debouncedSearchQuery : ""}
+              />
+            ) : subject === "英语" ? (
+              <EnglishKnowledgePanel
+                tree={ENGLISH_KNOWLEDGE_TREE}
+                expandedNodeIds={expandedEnglishKnowledgeNodes}
+                setExpandedNodeIds={setExpandedEnglishKnowledgeNodes}
+                highlightId={highlightId}
+                knowledgeRefs={knowledgeRefs}
+                knowledgeFrequencies={knowledgeMistakeCounts}
+                searchQuery={showKnowledgeSearch ? debouncedSearchQuery : ""}
+              />
+            ) : structuredKnowledge ? (
+              <StructuredKnowledgePanel
+                subject={subject}
+                items={structuredKnowledge}
+                selectedDirectoryKey={selectedKnowledgeDirectoryKey}
+                onSelectDirectoryKey={setSelectedKnowledgeDirectoryKey}
+                highlightId={highlightId}
+                knowledgeRefs={knowledgeRefs}
+                knowledgeFrequencies={knowledgeMistakeCounts}
+                searchQuery={showKnowledgeSearch ? debouncedSearchQuery : ""}
+              />
+            ) : (
+              <div className="mt-5 space-y-3">
+                {filteredCurrentKnowledge.length > 0 ? (
+                  filteredCurrentKnowledge.map((item: KnowledgePoint) => {
+                    const frequencyMeta = getKnowledgeFrequencyMeta(knowledgeMistakeCounts[item.id] ?? 0);
 
-                  return (
-                    <div
-                      key={item.id}
-                      id={item.id}
-                      ref={(el) => {
-                        knowledgeRefs.current[item.id] = el;
-                      }}
-                      className={`rounded-2xl border p-4 transition ${frequencyMeta.surfaceClassName} ${
-                        highlightId === item.id
-                          ? "border-accent shadow-[0_0_0_2px_rgba(111,149,255,0.28)]"
-                          : "shadow-sm"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <h3 className="text-sm font-semibold">
-                          <KnowledgeInlineMarkdown markdown={item.title} />
-                        </h3>
-                        {frequencyMeta.badgeLabel ? (
-                          <span
-                            className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium ${frequencyMeta.badgeClassName}`}
-                          >
-                            {frequencyMeta.badgeLabel}
-                          </span>
-                        ) : null}
+                    return (
+                      <div
+                        key={item.id}
+                        id={item.id}
+                        ref={(el) => {
+                          knowledgeRefs.current[item.id] = el;
+                        }}
+                        className={`rounded-2xl border p-4 transition ${frequencyMeta.surfaceClassName} ${
+                          highlightId === item.id
+                            ? "border-accent shadow-[0_0_0_2px_rgba(111,149,255,0.28)]"
+                            : "shadow-sm"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-sm font-semibold">
+                            <KnowledgeInlineMarkdown markdown={item.title} />
+                          </h3>
+                          {frequencyMeta.badgeLabel ? (
+                            <span
+                              className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium ${frequencyMeta.badgeClassName}`}
+                            >
+                              {frequencyMeta.badgeLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">{item.summary}</p>
                       </div>
-                      <p className="mt-2 text-sm text-muted-foreground">{item.summary}</p>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border/80 bg-card/70 px-5 py-8 text-center">
-                  <p className="text-sm font-medium text-foreground">
-                    没有找到相关的知识点，请换个关键词试试
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+                    );
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border/80 bg-card/70 px-5 py-8 text-center">
+                    <p className="text-sm font-medium text-foreground">
+                      没有找到相关的知识点，请换个关键词试试
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {showDaofaAssistant ? <DaofaAssistant /> : null}
         </div>
       ) : null}
 
