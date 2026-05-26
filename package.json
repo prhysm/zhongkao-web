@@ -10,7 +10,10 @@
     "start": "next start",
     "lint": "eslint",
     "extract:math": "python3 scripts/extract_math_docx.py",
-    "extract:physics": "python3 scripts/extract_physics_docx.py"
+    "extract:physics": "python3 scripts/extract_physics_docx.py",
+    "upload:daofa": "node scripts/upload_to_supabase.js",
+    "upload:daofa:test": "UPLOAD_LIMIT=10 node scripts/upload_to_supabase.js",
+    "upload:daofa:resume": "UPLOAD_OFFSET=65 node scripts/upload_to_supabase.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
