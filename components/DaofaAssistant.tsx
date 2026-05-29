@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { apiUrl } from "@/lib/api-base";
+import { streamSsePost } from "@/lib/sse-stream";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -91,39 +92,34 @@ export function DaofaAssistant() {
     setMessages((prev) => [...prev, { role: "user", content: question }, { role: "assistant", content: "" }]);
 
     try {
-      const response = await fetch(apiUrl("/api/chat/daofa"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
-      });
-
-      if (!response.ok) {
-        const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(errorBody?.error ?? "助教暂时无法回答，请稍后再试。");
-      }
-
-      if (!response.body) {
-        throw new Error("浏览器未收到流式响应。");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
       let buffer = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const result = await streamSsePost(
+        apiUrl("/api/chat/daofa"),
+        { question },
+        (textDelta) => {
+          buffer += textDelta;
+          const parsed = parseSsePayloads(buffer);
+          buffer = parsed.rest;
+          for (const payload of parsed.payloads) {
+            appendAssistantContent(extractContent(payload));
+          }
+        },
+      );
 
-        buffer += decoder.decode(value, { stream: true });
-        const parsed = parseSsePayloads(buffer);
-        buffer = parsed.rest;
-
-        for (const payload of parsed.payloads) {
-          appendAssistantContent(extractContent(payload));
+      if (!result.ok) {
+        let message = "助教暂时无法回答，请稍后再试。";
+        try {
+          const errorBody = JSON.parse(result.rawText) as { error?: string };
+          if (typeof errorBody?.error === "string" && errorBody.error.trim()) {
+            message = errorBody.error;
+          }
+        } catch {
+          // 非 JSON 响应保持默认提示
         }
+        throw new Error(message);
       }
 
-      buffer += decoder.decode();
       const parsed = parseSsePayloads(`${buffer}\n\n`);
       for (const payload of parsed.payloads) {
         appendAssistantContent(extractContent(payload));
