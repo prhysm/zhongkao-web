@@ -1,4 +1,5 @@
 import type { AnalyzeErrorRequestBody, AnalyzeErrorResult } from "@/lib/analyze-error";
+import { apiUrl } from "@/lib/api-base";
 
 type AnalyzeErrorApiSuccess = {
   data: AnalyzeErrorResult;
@@ -9,8 +10,7 @@ type AnalyzeErrorApiFailure = {
 };
 
 function getAnalyzeErrorEndpoint(): string {
-  const base = process.env.NEXT_PUBLIC_ANALYZE_ERROR_API_URL?.trim().replace(/\/$/, "") ?? "";
-  return `${base}/api/analyze-error`;
+  return apiUrl("/api/analyze-error");
 }
 
 export async function requestAnalyzeError(

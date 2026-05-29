@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { apiUrl } from "@/lib/api-base";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -90,7 +91,7 @@ export function DaofaAssistant() {
     setMessages((prev) => [...prev, { role: "user", content: question }, { role: "assistant", content: "" }]);
 
     try {
-      const response = await fetch("/api/chat/daofa", {
+      const response = await fetch(apiUrl("/api/chat/daofa"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),

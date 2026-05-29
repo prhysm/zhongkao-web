@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import daofaChunksJson from "@/daofa_chunks.json";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { corsPreflightResponse, getCorsHeaders, jsonWithCors } from "@/lib/api-cors";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -209,18 +210,22 @@ function mapUpstreamError(error: unknown): { status: number; message: string } {
   return { status: 500, message: "服务器内部错误" };
 }
 
+export async function OPTIONS(request: Request) {
+  return corsPreflightResponse(request);
+}
+
 export async function POST(request: Request) {
   try {
     let body: { question?: unknown };
     try {
       body = (await request.json()) as { question?: unknown };
     } catch {
-      return Response.json({ error: "请求体必须是合法 JSON" }, { status: 400 });
+      return jsonWithCors(request, { error: "请求体必须是合法 JSON" }, { status: 400 });
     }
 
     const question = typeof body.question === "string" ? body.question.trim() : "";
     if (!question) {
-      return Response.json({ error: "缺少 question 参数" }, { status: 400 });
+      return jsonWithCors(request, { error: "缺少 question 参数" }, { status: 400 });
     }
 
     const client = getOpenAIClient();
@@ -265,6 +270,7 @@ export async function POST(request: Request) {
 
     return new Response(readable, {
       headers: {
+        ...getCorsHeaders(request),
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
@@ -275,6 +281,6 @@ export async function POST(request: Request) {
     const mapped = mapUpstreamError(error);
     const status =
       mapped.status >= 400 && mapped.status < 600 ? mapped.status : 500;
-    return Response.json({ error: mapped.message }, { status });
+    return jsonWithCors(request, { error: mapped.message }, { status });
   }
 }
