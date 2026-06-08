@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
+    "@capacitor/camera": "^8.2.0",
     "@capacitor/core": "^8.3.4",
     "@supabase/supabase-js": "^2.105.4",
     "katex": "^0.16.45",

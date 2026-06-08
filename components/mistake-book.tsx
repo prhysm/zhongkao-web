@@ -46,6 +46,7 @@ import { getFocusExamTemplateBySubjectLabel } from "@/lib/focus-exams";
 import { MistakeExportMenu } from "@/components/mistake-export-menu";
 import { MistakeFormAnalyzing } from "@/components/mistake-form-analyzing";
 import { MistakePracticePrintSheet } from "@/components/mistake-practice-print-sheet";
+import { MistakePrintPreviewModal } from "@/components/mistake-print-preview-modal";
 import { MistakeQuestionUpload } from "@/components/mistake-question-upload";
 import { MistakePrintSheet } from "@/components/mistake-print-sheet";
 import {
@@ -54,6 +55,7 @@ import {
   pickMistakesForPracticePrint,
   type MistakePrintMode,
 } from "@/lib/mistake-practice-print";
+import { needsMobileExportFlow } from "@/lib/mobile-export";
 import { requestAnalyzeError } from "@/lib/analyze-error-client";
 import { useAuth } from "@/lib/auth-context";
 import { uploadMistakeQuestionImage } from "@/lib/mistake-question-image";
@@ -413,6 +415,9 @@ function MistakeBookContent({
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [selectedMistakeIds, setSelectedMistakeIds] = useState<Set<string>>(() => new Set());
   const [printMode, setPrintMode] = useState<MistakePrintMode>(null);
+  const [printPreviewMode, setPrintPreviewMode] = useState<Exclude<MistakePrintMode, null> | null>(
+    null
+  );
 
   const { user } = useAuth();
   const knowledgeRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -665,6 +670,10 @@ function MistakeBookContent({
   }, []);
 
   const triggerBrowserPrint = (mode: Exclude<MistakePrintMode, null>) => {
+    if (needsMobileExportFlow()) {
+      setPrintPreviewMode(mode);
+      return;
+    }
     setPrintMode(mode);
     window.requestAnimationFrame(() => window.print());
   };
@@ -1977,6 +1986,15 @@ function MistakeBookContent({
           scoreRecords={scoreRecords}
           subjectLabel={scoreSubjectFilter}
           timeManagementRecords={timeManagementRecords}
+        />
+      ) : null}
+
+      {printPreviewMode ? (
+        <MistakePrintPreviewModal
+          mode={printPreviewMode}
+          mistakes={printPreviewMode === "practice" ? practicePrintMistakes : subjectMistakes}
+          subjectLabel={subject}
+          onClose={() => setPrintPreviewMode(null)}
         />
       ) : null}
 

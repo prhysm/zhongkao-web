@@ -1,4 +1,5 @@
 import type { MistakeItem } from "@/lib/mistakes-model";
+import { shareOrDownloadBlob } from "@/lib/mobile-export";
 
 const CSV_HEADERS = ["科目", "出处", "知识点", "错误原因", "解题技巧"] as const;
 
@@ -30,7 +31,7 @@ export function getMistakeCsvFilename(subjectLabel?: string, date = new Date()):
   return `我的错题本${subjectPart}_${year}${month}${day}.csv`;
 }
 
-export function exportToCSV(data: MistakeItem[], subjectLabel?: string): void {
+export function buildMistakeCsvContent(data: MistakeItem[]): string {
   const rows = data.map((item) => [
     displayMistakeField(item.subject),
     displayMistakeField(item.source),
@@ -39,19 +40,15 @@ export function exportToCSV(data: MistakeItem[], subjectLabel?: string): void {
     displayMistakeField(item.skill),
   ]);
 
-  const csvContent = [
+  return [
     CSV_HEADERS.join(","),
     ...rows.map((row) => row.map(escapeCsvField).join(",")),
   ].join("\n");
+}
 
+export async function exportToCSV(data: MistakeItem[], subjectLabel?: string): Promise<void> {
+  const csvContent = buildMistakeCsvContent(data);
+  const filename = getMistakeCsvFilename(subjectLabel);
   const blob = new Blob(["\uFEFF", csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = getMistakeCsvFilename(subjectLabel);
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  await shareOrDownloadBlob(blob, filename, filename);
 }

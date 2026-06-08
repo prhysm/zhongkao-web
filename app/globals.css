@@ -174,4 +174,32 @@ html {
     font-size: 10px;
     letter-spacing: 0.12em;
   }
+
+  body:has(.mistake-print-preview-modal) * {
+    visibility: hidden;
+  }
+
+  body:has(.mistake-print-preview-modal) .mistake-print-preview-modal,
+  body:has(.mistake-print-preview-modal) .mistake-print-preview-modal * {
+    visibility: visible;
+  }
+
+  .mistake-print-preview-modal {
+    position: static !important;
+    inset: auto !important;
+    z-index: auto !important;
+    display: block !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  .mistake-print-preview-modal > header,
+  .mistake-print-preview-modal > p {
+    display: none !important;
+  }
+
+  .mistake-print-preview-modal .mistake-review-print-sheet,
+  .mistake-print-preview-modal .mistake-practice-print-sheet {
+    display: block !important;
+  }
 }
